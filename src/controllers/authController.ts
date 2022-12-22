@@ -37,7 +37,7 @@ export const login = async (
       err.status = 400;
       return next(err);
     }
-    if (req.body.password === user.password) {
+    if (bcrypt.compareSync(req.body.password, user.password)) {
       const token = jwt.sign({ userId: user._id }, process.env.APP_SECRET);
       const { fullname, email } = user;
 
