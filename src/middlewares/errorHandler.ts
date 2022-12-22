@@ -20,10 +20,6 @@ exports.errorHandler = (
 ) => {
   err.statusCode = res.statusCode = err.status || 500;
   // Duplication
-  console.log({
-    err,
-  });
-
   if (err.code === 11000) {
     err.statusCode = 400;
     for (let i in err.keyValue) {
@@ -45,8 +41,6 @@ exports.errorHandler = (
 //       err.message.push(err.errors[i].message);
 //     }
 //   }
-console.log("ERROR");
-console.log(err);
 
   res.status(err.statusCode).json({
     status: "fail",
