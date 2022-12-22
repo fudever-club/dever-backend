@@ -25,9 +25,16 @@ const userSchema = mongoose.Schema(
   { timestamps: true }
 );
 
-userSchema.pre("save", function (next: NextFunction) {
-  //hash password
-  next();
+userSchema.pre("save", function (this: any, next: NextFunction) {
+  let user = this
+  bcrypt.hash(user.password, 10, function (err: Error, hash: string){
+    if(err) {
+      return next(err);
+    }else{
+      user.password = hash;
+      next();
+    }
+  })
 });
 
 export const User = mongoose.model("User", userSchema);

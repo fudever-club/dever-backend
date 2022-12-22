@@ -3,8 +3,8 @@ import {ErrorType} from "./middlewares/errorHandler"
 require('dotenv').config();
 
 //connect BD
-import { connectDB } from "./config/db";
-connectDB();
+const {connectDB} = require('./config/db');
+connectDB()
 
 const authRoute = require("./routes/authRoute")
 const { errorHandler } = require("./middlewares/errorHandler");
@@ -39,5 +39,5 @@ app.get("/", (req, res, next) => {
 });
 
 app.listen(port, () => {
-  console.log("connected to port successfully " + port);
+  console.log(`connected to port successfully http://localhost:${port}/ `);
 });
