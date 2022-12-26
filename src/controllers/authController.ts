@@ -24,7 +24,13 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     } catch (err) {
         next(err);
     }
-};
+
+
+
+    if (bcrypt.compareSync(req.body.password, user.password)) {
+      const token = jwt.sign({ userId: user._id }, process.env.APP_SECRET);
+      const { fullname, email } = user;
+
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
     try {
