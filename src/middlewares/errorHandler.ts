@@ -1,16 +1,14 @@
-import { Request, Response, NextFunction, ErrorRequestHandler } from "express";
+import { Request, Response, NextFunction } from 'express';
 
 export interface ErrorType {
     statusCode?: number;
     status?: number;
-    code?: number
+    code?: number;
     keyValue?: {};
     message: string;
     kind?: string;
-    // error: any | {
-    //     Error: any
-    // }
-  }
+}
+
 
 exports.errorHandler = (
   err: ErrorType,
@@ -24,8 +22,9 @@ exports.errorHandler = (
     err.statusCode = 400;
     for (let i in err.keyValue) {
       err.message = `${i} have to be unique!`;
+
     }
-  }
+
 
   // ObjectID: not found
   if (err.kind === "ObjectId") {
@@ -42,8 +41,9 @@ exports.errorHandler = (
 //     }
 //   }
 
-  res.status(err.statusCode).json({
-    status: "fail",
-    message: err.message,
-  });
+
+    res.status(err.statusCode).json({
+        status: 'fail',
+        message: err.message,
+    });
 };
