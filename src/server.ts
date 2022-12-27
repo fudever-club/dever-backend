@@ -2,11 +2,11 @@ import { ErrorType } from './middlewares/errorHandler';
 
 require('dotenv').config();
 
+const authRoute = require('./routes/authRoute');
+const followRoute = require('./routes/followRoute');
+const { errorHandler } = require('./middlewares/errorHandler');
 const { connectDB } = require('./config/db');
 connectDB();
-
-const authRoute = require('./routes/authRoute');
-const { errorHandler } = require('./middlewares/errorHandler');
 
 import express from 'express';
 import cors from 'cors';
@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/v1/auth', authRoute);
+app.use('/api/v1/follow', followRoute);
 
 app.all('*', (req, res, next) => {
     const err: ErrorType = new Error('Unhandled Route');
@@ -26,13 +27,6 @@ app.all('*', (req, res, next) => {
     next(err);
 });
 app.use('/api/v1/auth', errorHandler);
-
-app.get('/', (req, res, next) => {
-    res.status(200).json({
-        status: 'OK',
-        data: 'Hello world',
-    });
-});
 
 app.listen(port, () => {
     console.log(`connected to port successfully http://localhost:${port}/ `);
