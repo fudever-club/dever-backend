@@ -9,6 +9,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     try {
         const user = {
             ...req.body,
+            bio: '',
             avatar: 'http://res.cloudinary.com/de41uvd76/image/upload/v1672120944/vojnvhtyfxmhssupfnok.png',
         };
         await User.create(user);
@@ -18,8 +19,8 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
                 user,
             },
         });
-        res.json('User registered');
     } catch (err) {
+        console.log(err);
         next(err);
     }
 };
@@ -27,14 +28,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     try {
         const user = await User.findOne({ email: req.body.email });
         if (!user) {
-            const err: ErrorType = new Error('Email is not valid');
+            const err: ErrorType = new Error('Email or Password is not correct');
             err.status = 400;
             return next(err);
         }
+        console.log(user);
 
         if (bcrypt.compareSync(req.body.password, user.password)) {
             const token = jwt.sign({ userId: user._id }, process.env.APP_SECRET);
-            const { fullname, email, avatar } = user;
+            const { fullname, email, avatar, bio } = user;
             res.status(200).json({
                 status: 'success',
                 data: {
@@ -42,6 +44,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
                         fullname,
                         email,
                         avatar,
+                        bio,
                     },
                     token,
                 },

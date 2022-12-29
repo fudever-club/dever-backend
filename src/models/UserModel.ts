@@ -21,6 +21,14 @@ const userSchema = mongoose.Schema(
             minLength: [6, 'Password must be at least 6 characters'],
             trim: true,
         },
+        bio: {
+            type: String,
+            maxLength: [200, 'Your bio is too long'],
+            trim: true,
+        },
+        avatar: {
+            type: String,
+        },
     },
     { timestamps: true },
 );
