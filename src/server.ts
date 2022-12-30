@@ -1,3 +1,4 @@
+import { verifyToken } from './middlewares/veryfyToken';
 import { ErrorType } from './middlewares/errorHandler';
 
 require('dotenv').config();
@@ -28,6 +29,7 @@ app.all('*', (req, res, next) => {
     err.statusCode = 404;
     next(err);
 });
+// app.use(verifyToken);
 app.use('/api/v1/auth', errorHandler);
 
 app.listen(port, () => {
