@@ -6,6 +6,7 @@ require('dotenv').config();
 const authRoute = require('./routes/authRoute');
 const followRoute = require('./routes/followRoute');
 const usersRoute = require('./routes/usersRoute');
+const coinRoute = require('./routes/coinRoute');
 const { errorHandler } = require('./middlewares/errorHandler');
 const { connectDB } = require('./config/db');
 connectDB();
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api/v1/auth', authRoute);
 app.use('/api/v1/follow', followRoute);
 app.use('/api/v1/users', usersRoute);
+app.use('/api/v1/coin', coinRoute);
 
 app.all('*', (req, res, next) => {
     const err: ErrorType = new Error('Unhandled Route');
