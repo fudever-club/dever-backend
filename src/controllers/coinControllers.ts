@@ -47,3 +47,26 @@ export const getCoinFiat = async (req: Request, res: Response) => {
         }
     });
 };
+
+export const getCategories = async (req: Request, res: Response) => {
+    let response = null;
+    new Promise(async (resolve, reject) => {
+        try {
+            response = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/categories', {
+                headers: {
+                    'X-CMC_PRO_API_KEY': `${process.env.API_KEY}`,
+                },
+            });
+        } catch (ex) {
+            response = null;
+            // error
+            reject(ex);
+        }
+        if (response) {
+            // success
+            const json = response.data;
+            res.json();
+            resolve(json);
+        }
+    });
+};
