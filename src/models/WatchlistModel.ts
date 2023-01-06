@@ -1,15 +1,15 @@
 const mongoose = require('mongoose');
 
-const followSchema = mongoose.Schema(
+const watchlistSchema = mongoose.Schema(
     {
         userId: {
             type: String,
         },
-        followedId: {
+        tokenId: {
             type: String,
         },
     },
     { timestamps: true },
 );
 
-export const Follow = mongoose.model('Follow', followSchema);
+export const Watchlist = mongoose.model('Watchlist', watchlistSchema);

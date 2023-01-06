@@ -14,7 +14,6 @@ export const getCoinLastest = async (req: Request, res: Response) => {
         } catch (ex) {
             response = null;
             // error
-            console.log(ex);
             reject(ex);
         }
         if (response) {
@@ -38,7 +37,6 @@ export const getCoinFiat = async (req: Request, res: Response) => {
         } catch (ex) {
             response = null;
             // error
-            console.log(ex);
             reject(ex);
         }
         if (response) {

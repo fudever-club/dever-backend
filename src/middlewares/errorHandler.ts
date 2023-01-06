@@ -40,6 +40,6 @@ exports.errorHandler = (err: ErrorType, req: Request, res: Response, next: NextF
 
     res.status(err.statusCode).json({
         status: 'fail',
-        message: err,
+        message: err.message,
     });
 };
