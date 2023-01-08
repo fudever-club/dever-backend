@@ -3,7 +3,7 @@ import { Request, Response, NextFunction, json } from 'express';
 import axios from 'axios';
 
 export const getCoinLastest = async (req: Request, res: Response) => {
-    let response = null;
+    let response: any;
     new Promise(async (resolve, reject) => {
         try {
             response = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest', {
@@ -26,7 +26,7 @@ export const getCoinLastest = async (req: Request, res: Response) => {
 };
 
 export const getCoinFiat = async (req: Request, res: Response) => {
-    let response = null;
+    let response: any;
     new Promise(async (resolve, reject) => {
         try {
             response = await axios.get('https://pro-api.coinmarketcap.com/v1/fiat/map', {
@@ -42,14 +42,14 @@ export const getCoinFiat = async (req: Request, res: Response) => {
         if (response) {
             // success
             const json = response.data;
-            res.json();
+            res.json(json);
             resolve(json);
         }
     });
 };
 
 export const getCategories = async (req: Request, res: Response) => {
-    let response = null;
+    let response: any;
     new Promise(async (resolve, reject) => {
         try {
             response = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/categories', {
@@ -62,10 +62,13 @@ export const getCategories = async (req: Request, res: Response) => {
             // error
             reject(ex);
         }
+
         if (response) {
             // success
             const json = response.data;
-            res.json();
+            console.log(json);
+
+            res.json(json);
             resolve(json);
         }
     });
