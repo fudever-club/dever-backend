@@ -66,8 +66,6 @@ export const getCategories = async (req: Request, res: Response) => {
         if (response) {
             // success
             const json = response.data;
-            console.log(json);
-
             res.json(json);
             resolve(json);
         }

@@ -16,6 +16,7 @@ import express from 'express';
 import cors from 'cors';
 
 const app = express();
+const server = require('http').Server(app);
 const port = process.env.APP_PORT || 5000;
 
 app.use(cors());
@@ -36,6 +37,9 @@ app.all('*', (req, res, next) => {
 // app.use(verifyToken);
 app.use('/api/v1/auth', errorHandler);
 
-app.listen(port, () => {
+import { socketServer } from './socket';
+socketServer.init(server);
+socketServer.onConnection();
+server.listen(port, () => {
     console.log(`connected to port successfully http://localhost:${port}/ `);
 });

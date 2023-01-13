@@ -32,7 +32,6 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
         const user = await User.findById(req.params.userId);
         const followingList = await Follow.find({ userId: user._id });
         const followerList = await Follow.find({ followedId: user._id });
-
         const { _id, fullname, email, bio, avatar } = user;
         res.status(200).json({
             status: 'success',
@@ -105,9 +104,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
 export const editProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { userId } = req.params;
-
         const response = await User.findByIdAndUpdate(userId, req.body, { new: true, runValidator: true });
-        console.log(response);
         const { avatar, bio, email, fullname, _id } = response;
         res.status(200).json({
             status: 'success',
