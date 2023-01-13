@@ -13,8 +13,6 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
             bio: '',
             avatar: 'http://res.cloudinary.com/de41uvd76/image/upload/v1672120944/vojnvhtyfxmhssupfnok.png',
         };
-        console.log(user);
-
         await User.create(user);
         res.status(200).json({
             status: 'success',

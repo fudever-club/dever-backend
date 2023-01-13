@@ -35,9 +35,6 @@ export const followOneUser = async (req: Request, res: Response, next: NextFunct
         }
         await User.findById(userId);
         await User.findById(followedId);
-        console.log(userId);
-        console.log(followedId);
-
         const follow = {
             userId,
             followedId,
