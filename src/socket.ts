@@ -24,6 +24,10 @@ export const socketServer = (function () {
                 socket.on('follow', (socket: any) => {
                     instance.io.emit('follow', 'ulatroi');
                 });
+                socket.on('watchlist', (socket: any) => {
+                    instance.io.emit('watchlist', 'my watchlist');
+                    console.log('abcfdfs');
+                });
             });
         },
     };
