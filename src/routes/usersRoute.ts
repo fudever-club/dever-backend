@@ -1,5 +1,6 @@
-import { editProfile, changePassword } from './../controllers/usersController';
 import express from 'express';
+
+import { editProfile, changePassword } from './../controllers/usersController';
 import { getAllUsers, getUserById } from '../controllers/usersController';
 import { verifyToken } from '../middlewares/veryfyToken';
 

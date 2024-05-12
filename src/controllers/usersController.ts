@@ -1,6 +1,4 @@
-import { Follow } from './../models/FollowModel';
-import { ErrorType } from './../middlewares/errorHandler';
-import { Request, Response, NextFunction, json } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
 const bcrypt = require('bcryptjs');
 
@@ -12,12 +10,14 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             results: users.length,
             data: {
                 users: users.map((user: any) => {
-                    const { _id, avatar, fullname, email } = user;
+                    const { _id, avatar, firstname, lastname, positionId, dateJoin } = user;
                     return {
                         _id,
-                        fullname,
-                        email,
                         avatar,
+                        firstname,
+                        lastname,
+                        positionId,
+                        dateJoin,
                     };
                 }),
             },
@@ -30,8 +30,8 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await User.findById(req.params.userId);
-        const followingList = await Follow.find({ userId: user._id });
-        const followerList = await Follow.find({ followedId: user._id });
+        // const followingList = await Follow.find({ userId: user._id });
+        // const followerList = await Follow.find({ followedId: user._id });
         const { _id, fullname, email, bio, avatar } = user;
         res.status(200).json({
             status: 'success',
@@ -41,8 +41,8 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
                 email,
                 bio,
                 avatar,
-                following: followingList.map((item: any) => item.followedId),
-                follower: followerList.map((item: any) => item.userId),
+                // following: followingList.map((item: any) => item.followedId),
+                // follower: followerList.map((item: any) => item.userId),
             },
         });
     } catch (error) {

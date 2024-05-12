@@ -1,15 +1,16 @@
-import { verifyToken } from './middlewares/veryfyToken';
 import { ErrorType } from './middlewares/errorHandler';
 
 require('dotenv').config();
 
 const authRoute = require('./routes/authRoute');
-const followRoute = require('./routes/followRoute');
 const usersRoute = require('./routes/usersRoute');
-const coinRoute = require('./routes/coinRoute');
-const watchlistRoute = require('./routes/watchlistRoute');
+const socialRoute = require('./routes/socialRoute');
+const majorRoute = require('./routes/majorRoute');
+const departmentRoute = require('./routes/departmentRoute');
 const { errorHandler } = require('./middlewares/errorHandler');
+
 const { connectDB } = require('./config/db');
+
 connectDB();
 
 import express from 'express';
@@ -24,17 +25,18 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/v1/auth', authRoute);
-app.use('/api/v1/follow', followRoute);
 app.use('/api/v1/users', usersRoute);
-app.use('/api/v1/coin', coinRoute);
-app.use('/api/v1/watchlist', watchlistRoute);
+
+app.use('/api/v1/social', socialRoute);
+app.use('/api/v1/major', majorRoute);
+app.use('/api/v1/department', departmentRoute);
 
 app.all('*', (req, res, next) => {
     const err: ErrorType = new Error('Unhandled Route');
     err.statusCode = 404;
     next(err);
 });
-// app.use(verifyToken);
+
 app.use('/api/v1/auth', errorHandler);
 
 import { socketServer } from './socket';

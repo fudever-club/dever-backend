@@ -4,11 +4,6 @@ import { NextFunction } from 'express';
 
 const userSchema = mongoose.Schema(
     {
-        fullname: {
-            type: String,
-            required: [true, 'Name must be required'],
-            trim: true,
-        },
         email: {
             type: String,
             unique: true,
@@ -21,13 +16,62 @@ const userSchema = mongoose.Schema(
             minLength: [6, 'Password must be at least 6 characters'],
             trim: true,
         },
-        bio: {
+        description: {
             type: String,
-            maxLength: [200, 'Your bio is too long'],
+            maxLength: [200, 'Your description is too long'],
             trim: true,
         },
         avatar: {
             type: String,
+        },
+        nickname: {
+            type: String,
+        },
+        phone: {
+            type: String,
+        },
+
+        firstname: {
+            type: String,
+            trim: true,
+        },
+        lastname: {
+            type: String,
+            trim: true,
+        },
+        dob: {
+            type: Date,
+        },
+        hometown: {
+            type: String,
+            trim: true,
+        },
+        positionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Position',
+        },
+        departmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Department',
+        },
+        job: {
+            type: String,
+            trim: true,
+        },
+        workplace: {
+            type: String,
+            trim: true,
+        },
+        school: {
+            type: String,
+            trim: true,
+        },
+        majorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Major',
+        },
+        dateJoin: {
+            type: Date,
         },
     },
     { timestamps: true },
