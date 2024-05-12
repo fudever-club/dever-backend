@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
 const bcrypt = require('bcryptjs');
+import _ from 'lodash';
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -29,20 +30,14 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await User.findById(req.params.userId);
-        // const followingList = await Follow.find({ userId: user._id });
-        // const followerList = await Follow.find({ followedId: user._id });
-        const { _id, fullname, email, bio, avatar } = user;
+        const user = await User.findById(req.params.userId).populate('majorId').populate('positionId');
+
+        const response = _.omit(user.toObject(), ['password']);
+
         res.status(200).json({
             status: 'success',
-            results: {
-                _id,
-                fullname,
-                email,
-                bio,
-                avatar,
-                // following: followingList.map((item: any) => item.followedId),
-                // follower: followerList.map((item: any) => item.userId),
+            data: {
+                ...response,
             },
         });
     } catch (error) {
@@ -105,11 +100,13 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
     try {
         const { userId } = req.params;
         const response = await User.findByIdAndUpdate(userId, req.body, { new: true, runValidator: true });
-        const { avatar, bio, email, fullname, _id } = response;
+
+        const responseData = _.omit(response.toObject(), ['password']);
+
         res.status(200).json({
             status: 'success',
             message: 'Edit profile successfully',
-            data: { avatar, bio, email, fullname, _id },
+            data: responseData,
         });
     } catch (error) {
         next(error);

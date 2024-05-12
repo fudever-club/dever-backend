@@ -7,6 +7,7 @@ const usersRoute = require('./routes/usersRoute');
 const socialRoute = require('./routes/socialRoute');
 const majorRoute = require('./routes/majorRoute');
 const departmentRoute = require('./routes/departmentRoute');
+const positionRoute = require('./routes/positionRoute');
 const { errorHandler } = require('./middlewares/errorHandler');
 
 const { connectDB } = require('./config/db');
@@ -30,6 +31,7 @@ app.use('/api/v1/users', usersRoute);
 app.use('/api/v1/social', socialRoute);
 app.use('/api/v1/major', majorRoute);
 app.use('/api/v1/department', departmentRoute);
+app.use('/api/v1/position', positionRoute);
 
 app.all('*', (req, res, next) => {
     const err: ErrorType = new Error('Unhandled Route');

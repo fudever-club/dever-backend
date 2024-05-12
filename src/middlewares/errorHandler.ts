@@ -12,9 +12,6 @@ export interface ErrorType {
 
 exports.errorHandler = (err: ErrorType, req: Request, res: Response, next: NextFunction) => {
     err.statusCode = res.statusCode = err.status || 500;
-    // Duplication
-    console.log('loi roi');
-    console.log(err);
 
     if (err.code === 11000) {
         err.statusCode = 400;

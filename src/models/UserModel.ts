@@ -73,6 +73,8 @@ const userSchema = mongoose.Schema(
         dateJoin: {
             type: Date,
         },
+        favourites: [{ type: String }],
+        skills: [{ type: String }],
     },
     { timestamps: true },
 );
