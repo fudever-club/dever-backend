@@ -1,16 +1,16 @@
-import { ErrorType } from './middlewares/errorHandler';
+import { ErrorType } from './src/middlewares/errorHandler';
 
 require('dotenv').config();
 
-const authRoute = require('./routes/authRoute');
-const usersRoute = require('./routes/usersRoute');
-const socialRoute = require('./routes/socialRoute');
-const majorRoute = require('./routes/majorRoute');
-const departmentRoute = require('./routes/departmentRoute');
-const positionRoute = require('./routes/positionRoute');
-const { errorHandler } = require('./middlewares/errorHandler');
+const authRoute = require('./src/routes/authRoute');
+const usersRoute = require('./src/routes/usersRoute');
+const socialRoute = require('./src/routes/socialRoute');
+const majorRoute = require('./src/routes/majorRoute');
+const departmentRoute = require('./src/routes/departmentRoute');
+const positionRoute = require('./src/routes/positionRoute');
+const { errorHandler } = require('./src/middlewares/errorHandler');
 
-const { connectDB } = require('./config/db');
+const { connectDB } = require('./src/config/db');
 
 connectDB();
 
@@ -41,7 +41,7 @@ app.all('*', (req, res, next) => {
 
 app.use('/api/v1/auth', errorHandler);
 
-import { socketServer } from './socket';
+import { socketServer } from './src/socket';
 socketServer.init(server);
 socketServer.onConnection();
 server.listen(port, () => {
