@@ -33,17 +33,20 @@ app.use('/api/v1/major', majorRoute);
 app.use('/api/v1/department', departmentRoute);
 app.use('/api/v1/position', positionRoute);
 
-app.all('*', (req, res, next) => {
-    const err: ErrorType = new Error('Unhandled Route');
-    err.statusCode = 404;
-    next(err);
-});
+// app.all('*', (req, res, next) => {
+//     const err: ErrorType = new Error('Unhandled Route');
+//     err.statusCode = 404;
+//     next(err);
+// });
 
 app.use('/api/v1/auth', errorHandler);
 
 import { socketServer } from './src/socket';
+import swaggerDocs from './src/Utils/swagger';
 socketServer.init(server);
 socketServer.onConnection();
 server.listen(port, () => {
     console.log(`connected to port successfully http://localhost:${port}/ `);
+
+    swaggerDocs(app, Number(port));
 });
