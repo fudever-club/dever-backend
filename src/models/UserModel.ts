@@ -26,6 +26,7 @@ const userSchema = mongoose.Schema(
         },
         nickname: {
             type: String,
+            unique: true,
         },
         phone: {
             type: String,

@@ -11,15 +11,8 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             results: users.length,
             data: {
                 users: users.map((user: any) => {
-                    const { _id, avatar, firstname, lastname, positionId, dateJoin } = user;
-                    return {
-                        _id,
-                        avatar,
-                        firstname,
-                        lastname,
-                        positionId,
-                        dateJoin,
-                    };
+                    const res = _.omit(user.toObject(), ['password']);
+                    return res;
                 }),
             },
         });

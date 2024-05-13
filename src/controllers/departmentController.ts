@@ -20,3 +20,16 @@ export const createDepartment = async (req: Request, res: Response, next: NextFu
         next(err);
     }
 };
+
+export const getAllDepartments = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const departments = await Department.find({});
+        res.status(200).json({
+            status: 'success',
+            data: departments,
+            length: departments?.length,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
