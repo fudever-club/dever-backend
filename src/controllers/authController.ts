@@ -53,3 +53,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         }
     } catch (error) {}
 };
+
+export const welcome = (req: Request, res: Response, next: NextFunction) => {
+    try {
+        res.status(200).json({
+            status: 'success',
+            message: 'Welcome to the API',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
