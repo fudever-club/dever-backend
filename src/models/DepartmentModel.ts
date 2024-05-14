@@ -6,6 +6,10 @@ const departmentSchema = mongoose.Schema(
             type: String,
             required: [true, 'Name must be required'],
         },
+        constant: {
+            type: String,
+            required: [true, 'Constant must be required'],
+        },
     },
     { timestamps: true },
 );

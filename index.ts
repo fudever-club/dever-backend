@@ -8,6 +8,7 @@ const socialRoute = require('./src/routes/socialRoute');
 const majorRoute = require('./src/routes/majorRoute');
 const departmentRoute = require('./src/routes/departmentRoute');
 const positionRoute = require('./src/routes/positionRoute');
+const verifyTokenRoute = require('./src/routes/verifyTokenRoute');
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -32,6 +33,7 @@ app.use('/api/v1/social', socialRoute);
 app.use('/api/v1/major', majorRoute);
 app.use('/api/v1/department', departmentRoute);
 app.use('/api/v1/position', positionRoute);
+app.use('/api/v1/verifyToken', verifyTokenRoute);
 
 // app.all('*', (req, res, next) => {
 //     const err: ErrorType = new Error('Unhandled Route');

@@ -105,3 +105,17 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
         next(error);
     }
 };
+
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { userId } = req.params;
+        await User.findByIdAndDelete(userId);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Delete user successfully',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
