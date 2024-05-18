@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import _ from 'lodash';
 
@@ -94,8 +95,37 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
 
 export const editProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { userId } = req.params;
-        const response = await User.findByIdAndUpdate(userId, req.body, { new: true, runValidator: true });
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        console.log('user');
+        console.log(user);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed to edit this profile',
+            });
+        }
+
+        const { userId: id } = req.params;
+
+        const updateData = _.omit(req.body, ['_id', 'email']);
+
+        const response = await User.findByIdAndUpdate(id, updateData, { new: true, runValidator: true });
 
         const responseData = _.omit(response.toObject(), ['password']);
 
@@ -111,8 +141,30 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
 
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { userId } = req.params;
-        await User.findByIdAndDelete(userId);
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
+        const { userId: id } = req.params;
+        await User.findByIdAndDelete(id);
 
         res.status(200).json({
             status: 'success',

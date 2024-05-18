@@ -1,8 +1,33 @@
-import { Major } from './../models/MajorModel';
 import { Request, Response, NextFunction } from 'express';
+const jwt = require('jsonwebtoken');
+
+import { User } from '../models/UserModel';
+import { Major } from './../models/MajorModel';
 
 export const createMajor = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { name, constant } = req.body;
 
         await Major.create({
@@ -24,7 +49,6 @@ export const createMajor = async (req: Request, res: Response, next: NextFunctio
 export const getAllMajors = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const majors = await Major.find({});
-        console.log(majors);
 
         res.status(200).json({
             status: 'success',
@@ -53,6 +77,28 @@ export const getMajorById = async (req: Request, res: Response, next: NextFuncti
 
 export const editMajor = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
         const { name, constant } = req.body;
 
@@ -72,6 +118,28 @@ export const editMajor = async (req: Request, res: Response, next: NextFunction)
 
 export const deleteMajor = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
         await Major.findByIdAndDelete(id);
 

@@ -30,8 +30,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             return next(err);
         }
         if (bcrypt.compareSync(req.body.password, user.password)) {
-            const token = jwt.sign({ userId: user._id }, process.env.APP_SECRET);
-            const { _id, firstname, lastname, email, avatar, bio } = user;
+            const token = jwt.sign({ userId: user._id, isAdmin: user?.isAdmin }, process.env.APP_SECRET, {
+                expiresIn: '7d',
+            });
+            const { _id, firstname, lastname, email, avatar, bio, isAdmin } = user;
             res.status(200).json({
                 status: 'success',
                 data: {
@@ -42,6 +44,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
                         email,
                         avatar,
                         bio,
+                        isAdmin,
                     },
                     token,
                 },
@@ -58,7 +61,7 @@ export const welcome = (req: Request, res: Response, next: NextFunction) => {
     try {
         res.status(200).json({
             status: 'success',
-            message: 'Welcome to the API',
+            message: 'Welcome to the FU-DEVER',
         });
     } catch (error) {
         next(error);

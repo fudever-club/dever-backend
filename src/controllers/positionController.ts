@@ -1,8 +1,33 @@
-import { Position } from './../models/PositionModel';
 import { Request, Response, NextFunction } from 'express';
+const jwt = require('jsonwebtoken');
+
+import { User } from '../models/UserModel';
+import { Position } from './../models/PositionModel';
 
 export const createPosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { name, constant } = req.body;
 
         await Position.create({
@@ -53,6 +78,28 @@ export const getPositionById = async (req: Request, res: Response, next: NextFun
 
 export const editPosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
         const { name, constant } = req.body;
 
@@ -72,10 +119,32 @@ export const editPosition = async (req: Request, res: Response, next: NextFuncti
 
 export const deletePosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
         await Position.findByIdAndDelete(id);
 
-        res.status(204).json({
+        res.status(200).json({
             status: 'success',
             data: null,
         });

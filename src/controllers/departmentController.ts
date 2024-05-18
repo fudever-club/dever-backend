@@ -1,8 +1,33 @@
-import { Department } from './../models/DepartmentModel';
 import { Request, Response, NextFunction } from 'express';
+const jwt = require('jsonwebtoken');
+
+import { User } from '../models/UserModel';
+import { Department } from './../models/DepartmentModel';
 
 export const createDepartment = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { name, constant } = req.body;
 
         await Department.create({
@@ -51,6 +76,28 @@ export const getDepartmentById = async (req: Request, res: Response, next: NextF
 
 export const editDepartment = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
         const { name, constant } = req.body;
 
@@ -70,6 +117,28 @@ export const editDepartment = async (req: Request, res: Response, next: NextFunc
 
 export const deleteDepartment = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
         const { id } = req.params;
 
         await Department.findByIdAndDelete(id);

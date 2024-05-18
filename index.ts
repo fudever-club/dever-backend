@@ -9,6 +9,7 @@ const majorRoute = require('./src/routes/majorRoute');
 const departmentRoute = require('./src/routes/departmentRoute');
 const positionRoute = require('./src/routes/positionRoute');
 const verifyTokenRoute = require('./src/routes/verifyTokenRoute');
+const profileRoute = require('./src/routes/profileRoute');
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -29,6 +30,7 @@ app.use(express.json());
 app.use('/', authRoute);
 app.use('/api/v1/auth', authRoute);
 app.use('/api/v1/users', usersRoute);
+app.use('/api/v1/edit-profile', profileRoute);
 
 app.use('/api/v1/social', socialRoute);
 app.use('/api/v1/major', majorRoute);
