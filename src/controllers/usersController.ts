@@ -6,7 +6,7 @@ import _ from 'lodash';
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await User.find({}).populate('majorId').populate('positionId').populate('departmentId');
+        const users = await User.find({}).populate('majorId').populate('positionId').populate('departments');
         res.status(200).json({
             status: 'success',
             results: users.length,
@@ -27,7 +27,7 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
         const user = await User.findById(req.params.userId)
             .populate('majorId')
             .populate('positionId')
-            .populate('departmentId');
+            .populate('departments');
 
         const response = _.omit(user.toObject(), ['password']);
 

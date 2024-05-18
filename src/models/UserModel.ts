@@ -62,11 +62,13 @@ const userSchema = mongoose.Schema(
             ref: 'Position',
             default: null,
         },
-        departmentId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Department',
-            default: null,
-        },
+        departments: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Department',
+                default: null,
+            },
+        ],
         job: {
             type: String,
             trim: true,

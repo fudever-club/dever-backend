@@ -21,7 +21,9 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
 
         const updateData = _.omit(req.body, ['_id', 'email', 'positionId', 'isAdmin', 'isExcellent']);
 
-        const response = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidator: true });
+        const response = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidator: true }).populate(
+            'departments',
+        );
 
         const responseData = _.omit(response.toObject(), ['password']);
 
