@@ -8,7 +8,7 @@ export const getLeaderBoard = async (req: Request, res: Response, next: NextFunc
     try {
         const users = await Leaderboard.find({})?.populate({
             path: 'userId',
-            select: 'id firstname lastname',
+            select: 'id firstname lastname avatar',
         });
 
         res.status(200).json({
