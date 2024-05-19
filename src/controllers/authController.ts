@@ -8,7 +8,9 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     try {
         const user = {
             ...req.body,
-            avatar: 'http://res.cloudinary.com/de41uvd76/image/upload/v1672120944/vojnvhtyfxmhssupfnok.png',
+            avatar:
+                req.body?.avatar ??
+                'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
         };
         await User.create(user);
         res.status(200).json({

@@ -89,8 +89,8 @@ const userSchema = mongoose.Schema(
             ref: 'Major',
             default: null,
         },
-        dateJoin: {
-            type: Date,
+        gen: {
+            type: Number,
             default: null,
         },
         favourites: [{ type: String }],
@@ -102,6 +102,10 @@ const userSchema = mongoose.Schema(
         isAdmin: {
             type: Boolean,
             default: false,
+        },
+        MSSV: {
+            type: String,
+            default: null,
         },
     },
     { timestamps: true },
