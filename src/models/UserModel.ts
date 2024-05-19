@@ -107,6 +107,19 @@ const userSchema = mongoose.Schema(
             type: String,
             default: null,
         },
+        socials: [
+            {
+                url: {
+                    type: String,
+                    required: [true, 'Social url must be required'],
+                },
+                socialId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'Social',
+                    required: [true, 'Social id must be required'],
+                },
+            },
+        ],
     },
     { timestamps: true },
 );
