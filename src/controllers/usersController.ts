@@ -10,7 +10,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
-            .populate('socials');
+            .populate('socials.socialId');
         res.status(200).json({
             status: 'success',
             results: users.length,
