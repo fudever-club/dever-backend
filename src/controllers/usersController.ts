@@ -116,9 +116,6 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
 
         const user = await User.findById(userId);
 
-        console.log('user');
-        console.log(user);
-
         if (!user?.isAdmin) {
             res.status(403).json({
                 status: 'error',

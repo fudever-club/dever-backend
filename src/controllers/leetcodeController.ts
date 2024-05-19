@@ -11,6 +11,8 @@ export const getLeaderBoard = async (req: Request, res: Response, next: NextFunc
             select: 'id firstname lastname avatar',
         });
 
+        users.sort((a: any, b: any) => b.acSubmissionList.length - a.acSubmissionList.length);
+
         res.status(200).json({
             status: 'success',
             data: users,
