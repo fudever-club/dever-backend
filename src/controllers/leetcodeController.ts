@@ -6,7 +6,10 @@ const axios = require('axios');
 
 export const getLeaderBoard = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await Leaderboard.find({});
+        const users = await Leaderboard.find({})?.populate({
+            path: 'userId',
+            select: 'id firstname lastname',
+        });
 
         res.status(200).json({
             status: 'success',
