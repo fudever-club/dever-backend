@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const slugify = require('slugify');
 import { NextFunction } from 'express';
+import { generateUniqueSlug } from '../Utils/generateSlug';
 
 const userSchema = mongoose.Schema(
     {
@@ -37,7 +39,6 @@ const userSchema = mongoose.Schema(
             type: String,
             default: null,
         },
-
         firstname: {
             type: String,
             trim: true,
@@ -120,20 +121,49 @@ const userSchema = mongoose.Schema(
                 },
             },
         ],
+        slug: {
+            type: String,
+            unique: true,
+        },
     },
     { timestamps: true },
 );
 
 userSchema.pre('save', function (this: any, next: NextFunction) {
-    let user = this;
-    bcrypt.hash(user.password, 10, function (err: Error, hash: string) {
-        if (err) {
-            return next(err);
-        } else {
-            user.password = hash;
-            next();
+    const user = this;
+
+    // Hash password if it's new or has been modified
+    if (user.isModified('password')) {
+        bcrypt.hash(user.password, 10, function (err: Error, hash: string) {
+            if (err) {
+                return next(err);
+            } else {
+                user.password = hash;
+            }
+        });
+    }
+
+    next();
+});
+
+userSchema.pre('save', async function (this: any, next: NextFunction) {
+    if (this.isModified('firstname') || this.isModified('lastname')) {
+        this.slug = await generateUniqueSlug(this);
+    }
+    next();
+});
+
+// Generate slug from firstname and lastname before updating
+userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
+    const update = this.getUpdate() as any;
+    if (update.firstname || update.lastname) {
+        const firstname = update.firstname || this.getQuery().firstname;
+        const lastname = update.lastname || this.getQuery().lastname;
+        if (firstname && lastname) {
+            update.slug = await generateUniqueSlug({ firstname, lastname });
         }
-    });
+    }
+    next();
 });
 
 export const User = mongoose.model('User', userSchema);

@@ -37,8 +37,6 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 
         const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
 
-        console.log(leaderbaord);
-
         const response = _.omit(user.toObject(), ['password']);
 
         res.status(200).json({
@@ -51,6 +49,32 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
     } catch (error) {
         console.log(error);
 
+        next(error);
+    }
+};
+
+export const getUserBySlug = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        console.log(req.params.slug);
+
+        const user = await User.findOne({ slug: req.params.slug })
+            .populate('majorId')
+            .populate('positionId')
+            .populate('departments')
+            .populate('socials.socialId');
+
+        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
+
+        const response = _.omit(user.toObject(), ['password']);
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                ...response,
+                acSubmissionList: leaderbaord?.acSubmissionList,
+            },
+        });
+    } catch (error) {
         next(error);
     }
 };
