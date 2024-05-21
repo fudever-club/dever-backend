@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { User } from '../models/UserModel';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import _ from 'lodash';
+
+import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {

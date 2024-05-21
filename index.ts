@@ -12,6 +12,7 @@ const verifyTokenRoute = require('./src/routes/verifyTokenRoute');
 const profileRoute = require('./src/routes/profileRoute');
 const leetcodeRoute = require('./src/routes/leetcodeRoute');
 const imageActivityRoute = require('./src/routes/imageActivityRoute');
+const projectRoute = require('./src/routes/projectRoute');
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -41,6 +42,7 @@ app.use('/api/v1/position', positionRoute);
 app.use('/api/v1/verifyToken', verifyTokenRoute);
 app.use('/api/v1/leetcode', leetcodeRoute);
 app.use('/api/v1/image-activity', imageActivityRoute);
+app.use('/api/v1/project', projectRoute);
 
 // app.all('*', (req, res, next) => {
 //     const err: ErrorType = new Error('Unhandled Route');
