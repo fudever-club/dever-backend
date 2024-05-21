@@ -3,6 +3,7 @@ import { User } from '../models/UserModel';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 import _ from 'lodash';
+import { Leaderboard } from '../models/LeaderboardModel';
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -34,12 +35,17 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
             .populate('departments')
             .populate('socials.socialId');
 
+        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
+
+        console.log(leaderbaord);
+
         const response = _.omit(user.toObject(), ['password']);
 
         res.status(200).json({
             status: 'success',
             data: {
                 ...response,
+                acSubmissionList: leaderbaord?.acSubmissionList,
             },
         });
     } catch (error) {
