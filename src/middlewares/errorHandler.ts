@@ -10,8 +10,9 @@ export interface ErrorType {
     // errorArr: string[];
 }
 
-exports.errorHandler = (err: ErrorType, req: Request, res: Response, next: NextFunction) => {
+exports.errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     err.statusCode = res.statusCode = err.status || 500;
+    console.log(err);
 
     if (err.code === 11000) {
         err.statusCode = 400;
@@ -27,14 +28,14 @@ exports.errorHandler = (err: ErrorType, req: Request, res: Response, next: NextF
     }
 
     // Validation
-    // if (err.errors) {
-    //     err.statusCode = 400;
-    //     err.message = [];
-    //     for (let i in err.errors) {
-    //         err.message.push(err.errors[i].message);
-    //     }
-    // }
-    // console.log('err', err);
+    if (err.errors) {
+        err.statusCode = 400;
+        err.message = [];
+        for (let i in err.errors) {
+            err.message.push(err.errors[i].message);
+        }
+    }
+    console.log('err', err);
 
     res.status(err.statusCode).json({
         status: 'fail',

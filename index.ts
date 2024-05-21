@@ -44,13 +44,23 @@ app.use('/api/v1/leetcode', leetcodeRoute);
 app.use('/api/v1/image-activity', imageActivityRoute);
 app.use('/api/v1/project', projectRoute);
 
-// app.all('*', (req, res, next) => {
-//     const err: ErrorType = new Error('Unhandled Route');
-//     err.statusCode = 404;
-//     next(err);
+app.all('*', (req, res, next) => {
+    const err: ErrorType = new Error('Unhandled Route');
+    err.statusCode = 404;
+    next(err);
+});
+
+// app.use((error: any, req: any, res: any, next: any) => {
+//     error.statusCode = error.statusCode || 500; // Changed to 500 for a more appropriate default error code
+//     error.status = error.status || 'error';
+
+//     res.status(error.statusCode).json({
+//         status: error.status,
+//         message: error.message,
+//     });
 // });
 
-app.use('/api/v1/auth', errorHandler);
+app.use('/api/v1/', errorHandler);
 
 import { socketServer } from './src/socket';
 import swaggerDocs from './src/Utils/swagger';

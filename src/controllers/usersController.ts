@@ -56,8 +56,6 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 
 export const getUserBySlug = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        console.log(req.params.slug);
-
         const user = await User.findOne({ slug: req.params.slug })
             .populate('majorId')
             .populate('positionId')

@@ -17,7 +17,7 @@ const projectSchema = mongoose.Schema(
             type: String,
             required: [true, 'Image must be required'],
         },
-        subDescription: {
+        subTitle: {
             type: String,
             required: [true, 'Sub Description must be required'],
         },
@@ -42,15 +42,15 @@ projectSchema.pre('save', async function (this: any, next: NextFunction) {
 });
 
 // Generate slug from title before updating
-projectSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
-    const update = this.getUpdate();
-    if (update.title) {
-        const title = update.title;
-        if (title) {
-            update.slug = await generateProjectUniqueSlug({ title });
-        }
-    }
-    next();
-});
+// projectSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
+//     const update = this.getUpdate();
+//     if (update.title) {
+//         const title = update.title;
+//         if (title) {
+//             update.slug = await generateProjectUniqueSlug({ title });
+//         }
+//     }
+//     next();
+// });
 
 export const Project = mongoose.model('Project', projectSchema);

@@ -49,7 +49,6 @@ export const createPosition = async (req: Request, res: Response, next: NextFunc
 export const getAllPositions = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const positions = await Position.find({});
-        console.log(positions);
 
         res.status(200).json({
             status: 'success',
