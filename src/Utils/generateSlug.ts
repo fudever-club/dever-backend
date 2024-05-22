@@ -28,3 +28,16 @@ export async function generateProjectUniqueSlug(doc: any) {
 
     return uniqueSlug;
 }
+
+export async function generateAlbumUniqueSlug(doc: any) {
+    const baseSlug = slugify(`${doc.name}`, { lower: true, strict: true });
+    let uniqueSlug = baseSlug;
+    let counter = 1;
+
+    while (await mongoose.models.Project.exists({ slug: uniqueSlug })) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+    }
+
+    return uniqueSlug;
+}
