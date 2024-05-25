@@ -56,16 +56,42 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
     }
 };
 
-export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
+export const getAllUsers = async (req: any, res: Response, next: NextFunction) => {
     try {
-        const users = await User.find({})
+        // Parse pagination parameters
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const skip = (page - 1) * limit;
+
+        // Parse filter parameters
+        const filter = req.query.filter ? JSON.parse(req.query.filter as string) : {};
+
+        if (filter.kGeneration) {
+            const kGeneration = filter.kGeneration;
+            // Create a regex to match MSSV with specified kGeneration at positions 2 and 3
+            const regex = new RegExp(`^[a-zA-Z]{2}${kGeneration}`, 'i');
+            filter.MSSV = { $regex: regex };
+            delete filter.kGeneration; // Remove kGeneration from the filter object
+        }
+
+        // Fetch users with pagination and filtering
+        const users = await User.find(filter)
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
-            .populate('socials.socialId');
+            .populate('socials.socialId')
+            .skip(skip)
+            .limit(limit);
+
+        // Get the total count of documents matching the filter
+        const totalUsers = await User.countDocuments(filter);
+
         res.status(200).json({
             status: 'success',
             results: users.length,
+            total: totalUsers,
+            currentPage: page,
+            totalPages: Math.ceil(totalUsers / limit),
             data: {
                 users: users.map((user: any) => {
                     const res = _.omit(user.toObject(), ['password']);
