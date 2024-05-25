@@ -5,6 +5,7 @@ import _, { forEach } from 'lodash';
 
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
+import mongoose from 'mongoose';
 
 export const createManyUsersByCsv = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -60,11 +61,38 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
     try {
         // Parse pagination parameters
         const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
+        const limit = parseInt(req.query.limit as string) || 999;
         const skip = (page - 1) * limit;
 
-        // Parse filter parameters
-        const filter = req.query.filter ? JSON.parse(req.query.filter as string) : {};
+        let filter: any = {};
+
+        if (req.query.filter) {
+            try {
+                filter = JSON.parse(req.query.filter);
+
+                // Remove any keys with empty string values
+                Object.keys(filter).forEach((key) => {
+                    if (filter[key] === '') {
+                        delete filter[key];
+                    }
+                });
+
+                if (filter.departments) {
+                    console.log('🚀 ~ getAllUsers ~ filter.departments:', filter.departments);
+                    filter.departments = {
+                        $in: filter.departments.split(',').map((id: any) => new mongoose.Types.ObjectId(id.trim())),
+                    };
+                }
+            } catch (error) {
+                console.error('Error parsing filter:', error);
+                return res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
+            }
+        }
+
+        let search = req.query.search ? req.query.search.toString() : '';
+
+        // Remove surrounding double quotes if they exist
+        search = search.replace(/^"|"$/g, '');
 
         if (filter.kGeneration) {
             const kGeneration = filter.kGeneration;
@@ -74,12 +102,23 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
             delete filter.kGeneration; // Remove kGeneration from the filter object
         }
 
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            filter.$or = [
+                { firstname: searchRegex },
+                { lastname: searchRegex },
+                { email: searchRegex },
+                { nickname: searchRegex },
+            ];
+        }
+
         // Fetch users with pagination and filtering
         const users = await User.find(filter)
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
             .populate('socials.socialId')
+            .sort({ isAdmin: -1, isExcellent: -1 })
             .skip(skip)
             .limit(limit);
 
@@ -100,6 +139,7 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
             },
         });
     } catch (error) {
+        console.error('Error fetching users:', error);
         next(error);
     }
 };
