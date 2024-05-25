@@ -1,10 +1,60 @@
 import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-import _ from 'lodash';
+import _, { forEach } from 'lodash';
 
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
+
+export const createManyUsersByCsv = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed to edit this profile',
+            });
+        }
+
+        const { users } = req.body;
+
+        forEach(users, async (user: any) => {
+            const newUser = new User({
+                email: user?.email,
+                firstname: user?.firstname,
+                lastname: user?.lastname,
+                password: user?.phone,
+                positionId: '664daffb0ff1149197d5e940',
+                departments: ['66424ecbef8dad8c6c304235'],
+                majorId: '6644ce1fd59b62195dd378fd',
+                MSSV: user?.mssv,
+            });
+            await newUser.save();
+        });
+
+        res.status(200).json({
+            status: 'success',
+            data: users,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
 export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
