@@ -146,13 +146,22 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await User.findById(req.params.userId)
+        let user = await User.findOne({ nickname: req.params?.userId })
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
             .populate('socials.socialId');
 
-        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
+        // If user is not found by nickname, search by _id
+        if (!user) {
+            user = await User.findOne({ _id: req.params?.userId })
+                .populate('majorId')
+                .populate('positionId')
+                .populate('departments')
+                .populate('socials.socialId');
+        }
+
+        const leaderbaord = await Leaderboard.findOne({ userId: user._id });
 
         const response = _.omit(user.toObject(), ['password']);
 
@@ -166,54 +175,6 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
     } catch (error) {
         console.log(error);
 
-        next(error);
-    }
-};
-
-export const getUserBySlug = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await User.findOne({ slug: req.params.slug })
-            .populate('majorId')
-            .populate('positionId')
-            .populate('departments')
-            .populate('socials.socialId');
-
-        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
-
-        const response = _.omit(user.toObject(), ['password']);
-
-        res.status(200).json({
-            status: 'success',
-            data: {
-                ...response,
-                acSubmissionList: leaderbaord?.acSubmissionList,
-            },
-        });
-    } catch (error) {
-        next(error);
-    }
-};
-
-export const getUserByNickname = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await User.findOne({ nickname: req.params.nickname })
-            .populate('majorId')
-            .populate('positionId')
-            .populate('departments')
-            .populate('socials.socialId');
-
-        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
-
-        const response = _.omit(user.toObject(), ['password']);
-
-        res.status(200).json({
-            status: 'success',
-            data: {
-                ...response,
-                acSubmissionList: leaderbaord?.acSubmissionList,
-            },
-        });
-    } catch (error) {
         next(error);
     }
 };
