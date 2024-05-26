@@ -47,10 +47,18 @@ export const createAlbum = async (req: Request, res: Response, next: NextFunctio
 export const getAllAlbums = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const albums = await Album.find({});
+
+        // Limit the imageList to the first 5 images for each album
+        const limitedAlbums = albums.map((album: any) => {
+            const albumObject = album.toObject();
+            albumObject.imageList = albumObject.imageList.slice(0, 5);
+            return albumObject;
+        });
+
         res.status(200).json({
             status: 'success',
-            data: albums,
-            length: albums?.length,
+            data: limitedAlbums,
+            length: limitedAlbums.length,
         });
     } catch (err) {
         next(err);
@@ -61,7 +69,7 @@ export const getAlbumBySlug = async (req: Request, res: Response, next: NextFunc
     try {
         const { slug } = req.params;
         const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10; // Default limit to 10 for practical pagination
+        const limit = parseInt(req.query.limit as string) || 10;
         const skip = (page - 1) * limit;
 
         const album = await Album.findOne({ slug });
