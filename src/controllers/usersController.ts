@@ -194,6 +194,30 @@ export const getUserBySlug = async (req: Request, res: Response, next: NextFunct
     }
 };
 
+export const getUserByNickname = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await User.findOne({ nickname: req.params.nickname })
+            .populate('majorId')
+            .populate('positionId')
+            .populate('departments')
+            .populate('socials.socialId');
+
+        const leaderbaord = await Leaderboard.findOne({ userId: req.params.userId });
+
+        const response = _.omit(user.toObject(), ['password']);
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                ...response,
+                acSubmissionList: leaderbaord?.acSubmissionList,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { oldPassword, newPassword } = req.body;

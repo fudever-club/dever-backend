@@ -20,11 +20,19 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
 
         const { userId } = jwt.verify(token, process.env.APP_SECRET);
 
-        const updateData = _.omit(req.body, ['_id', 'email', 'positionId', 'isAdmin', 'isExcellent']);
-
-        const response = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidator: true }).populate(
+        const updateData = _.omit(req.body, [
+            '_id',
+            'email',
+            'positionId',
+            'isAdmin',
+            'isExcellent',
             'departments',
-        );
+            '',
+        ]);
+
+        const response = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidator: true })
+            .populate('departments')
+            .populate('socials.socialId');
 
         const responseData = _.omit(response.toObject(), ['password']);
 
