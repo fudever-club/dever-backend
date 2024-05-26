@@ -60,12 +60,36 @@ export const getAllAlbums = async (req: Request, res: Response, next: NextFuncti
 export const getAlbumBySlug = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { slug } = req.params;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10; // Default limit to 10 for practical pagination
+        const skip = (page - 1) * limit;
 
         const album = await Album.findOne({ slug });
 
+        if (!album) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'Album not found',
+            });
+        }
+
+        const totalImages = album.imageList.length;
+        const paginatedImages = album.imageList.slice(skip, skip + limit);
+
         res.status(200).json({
             status: 'success',
-            data: album,
+            data: {
+                album: {
+                    ...album.toObject(),
+                    imageList: paginatedImages,
+                },
+                pagination: {
+                    totalImages,
+                    currentPage: page,
+                    totalPages: Math.ceil(totalImages / limit),
+                    pageSize: limit,
+                },
+            },
         });
     } catch (err) {
         next(err);

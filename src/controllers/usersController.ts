@@ -78,7 +78,6 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
                 });
 
                 if (filter.departments) {
-                    console.log('🚀 ~ getAllUsers ~ filter.departments:', filter.departments);
                     filter.departments = {
                         $in: filter.departments.split(',').map((id: any) => new mongoose.Types.ObjectId(id.trim())),
                     };

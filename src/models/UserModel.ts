@@ -105,6 +105,10 @@ const userSchema = mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        isLeader: {
+            type: Boolean,
+            default: false,
+        },
         MSSV: {
             type: String,
             default: null,
