@@ -48,7 +48,6 @@ export const getAllAlbums = async (req: Request, res: Response, next: NextFuncti
     try {
         const albums = await Album.find({});
 
-        // Limit the imageList to the first 5 images for each album
         const limitedAlbums = albums.map((album: any) => {
             const albumObject = album.toObject();
             albumObject.imageList = albumObject.imageList.slice(0, 5);
@@ -291,6 +290,27 @@ export const deleteManyImageAlbum = async (req: Request, res: Response, next: Ne
         res.status(200).json({
             status: 'success',
             message: 'Images deleted successfully',
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const getAlbumById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const album = await Album.findById(id);
+
+        if (!album) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'Album not found',
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: album,
         });
     } catch (err) {
         next(err);

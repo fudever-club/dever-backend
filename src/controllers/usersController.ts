@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-import _, { forEach } from 'lodash';
+import _, { forEach, update } from 'lodash';
 
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
@@ -40,6 +40,7 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
                 firstname: user?.firstname,
                 lastname: user?.lastname,
                 password: user?.phone,
+                phone: user?.phone,
                 positionId: '664daffb0ff1149197d5e940',
                 departments: ['66424ecbef8dad8c6c304235'],
                 majorId: '6644ce1fd59b62195dd378fd',
@@ -65,6 +66,8 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
         const skip = (page - 1) * limit;
 
         let filter: any = {};
+        console.log('🚀 ~ getAllUsers ~ filter:', filter);
+        console.log('🚀 ~ getAllUsers ~ limit:', limit);
 
         if (req.query.filter) {
             try {
@@ -87,6 +90,8 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
                 return res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
             }
         }
+
+        console.log(filter);
 
         let search = req.query.search ? req.query.search.toString() : '';
 
@@ -112,14 +117,16 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
         }
 
         // Fetch users with pagination and filtering
-        const users = await User.find(filter)
+        let users = await User.find(filter)
+            .sort({ isAdmin: -1, isExcellent: -1, updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
-            .populate('socials.socialId')
-            .sort({ isAdmin: -1, isExcellent: -1 })
-            .skip(skip)
-            .limit(limit);
+            .populate('socials.socialId');
+
+        // users = users.slice(0, limit);
 
         // Get the total count of documents matching the filter
         const totalUsers = await User.countDocuments(filter);
@@ -168,6 +175,7 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
             status: 'success',
             data: {
                 ...response,
+                leetcodeUsername: leaderbaord?.leetcodeUsername,
                 acSubmissionList: leaderbaord?.acSubmissionList,
             },
         });
