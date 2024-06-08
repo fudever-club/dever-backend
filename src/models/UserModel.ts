@@ -33,7 +33,6 @@ const userSchema = mongoose.Schema(
         },
         nickname: {
             type: String,
-            unique: true,
             default: null,
         },
         phone: {
@@ -126,26 +125,51 @@ const userSchema = mongoose.Schema(
                 },
             },
         ],
-        slug: {
-            type: String,
-            unique: true,
-        },
     },
     { timestamps: true },
 );
 
-userSchema.pre('save', function (this: any, next: NextFunction) {
+userSchema.pre('save', async function (this: any, next: NextFunction) {
     const user = this;
-
+    // console.log('🚀 ~ user:', user);
     // Hash password if it's new or has been modified
     if (user.isModified('password')) {
-        bcrypt.hash(user.password, 10, function (err: Error, hash: string) {
+        await bcrypt.hash(user.password, 10, function (err: Error, hash: string) {
             if (err) {
+                console.log('🚀 ~ err:', err);
                 return next(err);
             } else {
                 user.password = hash;
+                console.log('🚀 ~ user:', user);
             }
         });
+    }
+
+    // Validate nickname uniqueness if it is set
+    if (user.isModified('nickname') && user.nickname) {
+        console.log('???????');
+
+        const existingUser = await mongoose.models.User.findOne({ nickname: user.nickname });
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+            return next(new Error('Nickname is already in use'));
+        }
+    }
+
+    next();
+});
+
+userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
+    const update = this.getUpdate() as any;
+
+    // Validate nickname uniqueness if it is being set
+    if (update.nickname) {
+        const query = this.getQuery();
+        const user = await mongoose.models.User.findOne(query);
+        const existingUser = await mongoose.models.User.findOne({ nickname: update.nickname });
+
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+            return next(new Error('Nickname is already in use'));
+        }
     }
 
     next();
@@ -159,16 +183,16 @@ userSchema.pre('save', async function (this: any, next: NextFunction) {
 });
 
 // Generate slug from firstname and lastname before updating
-userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
-    const update = this.getUpdate() as any;
-    if (update.firstname || update.lastname) {
-        const firstname = update.firstname || this.getQuery().firstname;
-        const lastname = update.lastname || this.getQuery().lastname;
-        if (firstname && lastname) {
-            update.slug = await generateUniqueSlug({ firstname, lastname });
-        }
-    }
-    next();
-});
+// userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
+//     const update = this.getUpdate() as any;
+//     if (update.firstname || update.lastname) {
+//         const firstname = update.firstname || this.getQuery().firstname;
+//         const lastname = update.lastname || this.getQuery().lastname;
+//         if (firstname && lastname) {
+//             update.slug = await generateUniqueSlug({ firstname, lastname });
+//         }
+//     }
+//     next();
+// });
 
 export const User = mongoose.model('User', userSchema);

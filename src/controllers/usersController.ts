@@ -35,6 +35,12 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
         const { users } = req.body;
 
         forEach(users, async (user: any) => {
+            const existingUser = await User.findOne({ email: user?.email });
+            if (existingUser) {
+                console.log(`User with email ${user.email} already exists.`);
+                return;
+            }
+
             const newUser = new User({
                 email: user?.email,
                 firstname: user?.firstname,
@@ -47,6 +53,8 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
                 MSSV: user?.mssv,
             });
             await newUser.save();
+            console.log('🚀 ~ forEach ~ newUser:', newUser);
+            console.log('--------------------');
         });
 
         res.status(200).json({
@@ -308,6 +316,55 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
         res.status(200).json({
             status: 'success',
             message: 'Delete user successfully',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const resetPasword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
+        const { userId: id } = req.params;
+
+        let passwordHashed = await bcrypt.hashSync('123456', 10, function (err: Error, hash: string) {
+            if (err) {
+                return next(err);
+            } else {
+                passwordHashed = hash;
+            }
+        });
+
+        const response = await User.findByIdAndUpdate(
+            id,
+            { password: passwordHashed },
+            { new: true, runValidator: true },
+        );
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Reset password successfully',
         });
     } catch (error) {
         next(error);

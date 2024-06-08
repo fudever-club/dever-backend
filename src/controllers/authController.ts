@@ -6,13 +6,41 @@ const bcrypt = require('bcryptjs');
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = {
-            ...req.body,
-            avatar:
-                req.body?.avatar ??
-                'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
-        };
-        await User.create(user);
+        const email = req.body.email;
+
+        const userExist = await User.findOne({ email });
+
+        if (userExist) {
+            const err: ErrorType = new Error('User already exist');
+            err.status = 400;
+            return next(err);
+        }
+
+        let user: any;
+        // const user = new User({
+        //     ...req.body,
+        //     avatar:
+        //         req.body?.avatar ??
+        //         'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
+        // });
+
+        await bcrypt.hash(req.body.password, 10, async function (err: Error, hash: string) {
+            if (err) {
+                console.log('🚀 ~ err:', err);
+                return next(err);
+            } else {
+                user = await User.create({
+                    ...req.body,
+                    password: hash,
+                    avatar:
+                        req.body?.avatar ??
+                        'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
+                });
+
+                console.log('🚀 ~ user:', user);
+            }
+        });
+
         res.status(200).json({
             status: 'success',
             data: {
