@@ -59,6 +59,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             err.status = 400;
             return next(err);
         }
+
+        console.log(req.body.password);
+        console.log(user.password);
+
         if (bcrypt.compareSync(req.body.password, user.password)) {
             const token = jwt.sign({ userId: user._id, isAdmin: user?.isAdmin }, process.env.APP_SECRET, {
                 expiresIn: '7d',

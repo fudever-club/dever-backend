@@ -66,25 +66,25 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
         const { oldPassword, newPassword } = req.body;
 
         if (!oldPassword || !newPassword) {
-            res.status(400).json({
+            return res.status(400).json({
                 status: 'error',
                 message: 'Old and new passwords are required',
             });
         }
         if (newPassword.length < 6) {
-            res.status(400).json({
+            return res.status(400).json({
                 status: 'error',
                 message: 'New password must be at least 6 characters',
             });
         }
         if (oldPassword === newPassword) {
-            res.status(400).json({
+            return res.status(400).json({
                 status: 'error',
                 message: 'Old and new passwords must be different',
             });
         }
         if (!bcrypt.compareSync(oldPassword, user.password)) {
-            res.status(400).json({
+            return res.status(400).json({
                 status: 'error',
                 message: 'Old password is incorrect',
             });
