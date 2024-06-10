@@ -39,10 +39,19 @@ export const subcribeLeetcode = async (req: Request, res: Response, next: NextFu
 
         const { leetcodeUsername } = req.body;
 
-        const user = await Leaderboard.create({
-            userId,
-            leetcodeUsername,
-        });
+        let user = await Leaderboard.findOne({ userId });
+
+        if (user) {
+            user.leetcodeUsername = leetcodeUsername;
+            user.acSubmissionList = [];
+            await user.save(); // Lưu lại thông tin cập nhật
+        } else {
+            // Nếu user không tồn tại, tạo mới user
+            user = await Leaderboard.create({
+                userId,
+                leetcodeUsername,
+            });
+        }
 
         res.status(200).json({
             status: 'success',
@@ -57,7 +66,7 @@ export const getUserAcProblems = async (username: string) => {
     try {
         let data = JSON.stringify({
             query: `query recentAcSubmissions($username: String!, $limit: Int!) { recentAcSubmissionList(username: $username, limit: $limit) { id title titleSlug timestamp } }`,
-            variables: { username: username, limit: 3 },
+            variables: { username: username, limit: 20 },
         });
         let config = {
             method: 'get',
@@ -93,10 +102,13 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
 
             const data = await getUserAcProblems(leetcodeUsername);
 
+            const specificDate = new Date('2024-05-01');
+            const specificDateTimestamp = specificDate.getTime() / 1000;
+
             const userCreationTimestamp = new Date(user?.createdAt).getTime() / 1000;
 
             const filteredData = data.filter(
-                (submission: any) => parseInt(submission.timestamp) > userCreationTimestamp,
+                (submission: any) => parseInt(submission.timestamp) > specificDateTimestamp,
             );
 
             const existingSubmissions = new Map(acSubmissionList.map((submission: any) => [submission.id, submission]));

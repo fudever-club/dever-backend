@@ -60,9 +60,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             return next(err);
         }
 
-        console.log(req.body.password);
-        console.log(user.password);
-
         if (bcrypt.compareSync(req.body.password, user.password)) {
             const token = jwt.sign({ userId: user._id, isAdmin: user?.isAdmin }, process.env.APP_SECRET, {
                 expiresIn: '7d',
@@ -96,6 +93,29 @@ export const welcome = (req: Request, res: Response, next: NextFunction) => {
         res.status(200).json({
             status: 'success',
             message: 'Welcome to the FU-DEVER',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const lowercaseEmail = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        console.log('-----');
+
+        const users = await User.find({});
+        const updatePromises = users.map(async (user: any) => {
+            if (user.email) {
+                user.email = user.email.toLowerCase();
+                console.log(user);
+
+                await user.save();
+            }
+        });
+        await Promise.all(updatePromises);
+        res.status(200).json({
+            status: 'success',
+            message: 'Lowercase email successfully',
         });
     } catch (error) {
         next(error);
