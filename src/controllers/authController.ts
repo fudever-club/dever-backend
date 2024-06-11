@@ -24,22 +24,31 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
         //         'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
         // });
 
-        await bcrypt.hash(req.body.password, 10, async function (err: Error, hash: string) {
-            if (err) {
-                console.log('🚀 ~ err:', err);
-                return next(err);
-            } else {
-                user = await User.create({
-                    ...req.body,
-                    password: hash,
-                    avatar:
-                        req.body?.avatar ??
-                        'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
-                });
-
-                console.log('🚀 ~ user:', user);
-            }
+        user = await new User({
+            ...req.body,
+            avatar:
+                req.body?.avatar ??
+                'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
         });
+        await user.save();
+
+        // await bcrypt.hash(req.body.password, 10, async function (err: Error, hash: string) {
+        //     console.log('🚀 ~ req.body.password:', req.body.password);
+        //     if (err) {
+        //         console.log('🚀 ~ err:', err);
+        //         return next(err);
+        //     } else {
+        //         user = await User.create({
+        //             ...req.body,
+        //             password: hash,
+        //             avatar:
+        //                 req.body?.avatar ??
+        //                 'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
+        //         });
+
+        //         console.log('🚀 ~ user:', user);
+        //     }
+        // });
 
         res.status(200).json({
             status: 'success',
@@ -59,6 +68,9 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             err.status = 400;
             return next(err);
         }
+
+        console.log('🚀 ~ login ~ req.body.password:', req.body.password);
+        console.log('🚀 ~ login ~ user.password:', user.password);
 
         if (bcrypt.compareSync(req.body.password, user.password)) {
             const token = jwt.sign({ userId: user._id, isAdmin: user?.isAdmin }, process.env.APP_SECRET, {

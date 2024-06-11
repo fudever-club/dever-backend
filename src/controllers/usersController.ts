@@ -74,8 +74,6 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
         const skip = (page - 1) * limit;
 
         let filter: any = {};
-        console.log('🚀 ~ getAllUsers ~ filter:', filter);
-        console.log('🚀 ~ getAllUsers ~ limit:', limit);
 
         if (req.query.filter) {
             try {
@@ -124,6 +122,7 @@ export const getAllUsers = async (req: any, res: Response, next: NextFunction) =
             ];
         }
 
+        console.log('🚀 ~ getAllUsers ~ filter:', filter);
         // Fetch users with pagination and filtering
         let users = await User.find(filter)
             .sort({ isAdmin: -1, isExcellent: -1, updatedAt: -1 })
