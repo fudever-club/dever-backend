@@ -35,6 +35,7 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
         const { users } = req.body;
 
         forEach(users, async (user: any) => {
+            console.log('🚀 ~ forEach ~ user:', user);
             const existingUser = await User.findOne({ email: user?.email });
             if (existingUser) {
                 console.log(`User with email ${user.email} already exists.`);

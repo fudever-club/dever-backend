@@ -122,8 +122,21 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
 
             const query = { leetcodeUsername };
 
+            console.log('🚀 ~ updatePromises ~ leetcodeUsername:', leetcodeUsername);
+            console.log('🚀 ~ updatePromises ~ mergedSubmissionList:', mergedSubmissionList);
+
+            const uniqueSubmissions: any = [];
+            const seenSlugs = new Set();
+
+            mergedSubmissionList.forEach((submission: any) => {
+                if (!seenSlugs.has(submission.titleSlug)) {
+                    uniqueSubmissions.push(submission);
+                    seenSlugs.add(submission.titleSlug);
+                }
+            });
+
             const updateDocument = {
-                $set: { acSubmissionList: mergedSubmissionList },
+                $set: { acSubmissionList: uniqueSubmissions },
             };
 
             await Leaderboard.updateOne(query, updateDocument);
