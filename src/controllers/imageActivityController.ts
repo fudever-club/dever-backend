@@ -2,9 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
 
 import { User } from '../models/UserModel';
-import { Major } from './../models/MajorModel';
+import { ImageActivity } from '../models/imageActivityModel';
 
-export const createMajor = async (req: Request, res: Response, next: NextFunction) => {
+export const insertNewImage = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const Authorization = req.header('authorization');
         if (!Authorization) {
@@ -28,17 +28,14 @@ export const createMajor = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        const { name, constant } = req.body;
-
-        await Major.create({
-            name,
-            constant,
-        });
+        const image = {
+            ...req.body,
+        };
+        await ImageActivity.create(image);
         res.status(200).json({
             status: 'success',
             data: {
-                name,
-                constant,
+                image,
             },
         });
     } catch (err) {
@@ -46,36 +43,58 @@ export const createMajor = async (req: Request, res: Response, next: NextFunctio
     }
 };
 
-export const getAllMajors = async (req: Request, res: Response, next: NextFunction) => {
+export const insertManyImages = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const majors = await Major.find({});
+        const Authorization = req.header('authorization');
+        if (!Authorization) {
+            return res.status(400).json({
+                error: {
+                    statusCode: 400,
+                    status: 'error',
+                    message: 'Token is invalid',
+                },
+            });
+        }
+        const token = Authorization.replace('Bearer ', '');
+        const { userId } = jwt.verify(token, process.env.APP_SECRET);
 
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin) {
+            res.status(403).json({
+                status: 'error',
+                message: 'You are not allowed use this feature',
+            });
+        }
+
+        const images = req.body;
+        await ImageActivity.insertMany(images);
         res.status(200).json({
             status: 'success',
-            data: majors,
-            length: majors?.length,
+            data: {
+                images,
+            },
         });
     } catch (err) {
         next(err);
     }
 };
 
-export const getMajorById = async (req: Request, res: Response, next: NextFunction) => {
+export const getAllImages = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { id } = req.params;
-
-        const major = await Major.findById(id);
-
+        const images = await ImageActivity.find({});
         res.status(200).json({
             status: 'success',
-            data: major,
+            data: {
+                images,
+            },
         });
     } catch (err) {
         next(err);
     }
 };
 
-export const editMajor = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteImage = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const Authorization = req.header('authorization');
         if (!Authorization) {
@@ -100,23 +119,17 @@ export const editMajor = async (req: Request, res: Response, next: NextFunction)
         }
 
         const { id } = req.params;
-        const { name, constant } = req.body;
-
-        const major = await Major.findByIdAndUpdate(id, {
-            name,
-            constant,
-        });
-
+        await ImageActivity.findByIdAndDelete(id);
         res.status(200).json({
             status: 'success',
-            data: major,
+            data: null,
         });
     } catch (err) {
         next(err);
     }
 };
 
-export const deleteMajor = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteManyImages = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const Authorization = req.header('authorization');
         if (!Authorization) {
@@ -140,9 +153,8 @@ export const deleteMajor = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        const { id } = req.params;
-        await Major.findByIdAndDelete(id);
-
+        const { ids } = req.body;
+        await ImageActivity.deleteMany({ _id: { $in: ids } });
         res.status(200).json({
             status: 'success',
             data: null,
