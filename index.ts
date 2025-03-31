@@ -36,6 +36,10 @@ app.use('/api/v1/department', departmentRoute);
 app.use('/api/v1/position', positionRoute);
 app.use('/api/v1/verifyToken', verifyTokenRoute);
 
+app.post("/api/v1/check-ip", (req, res) => {
+    res.json(req.body);
+});
+
 // app.all('*', (req, res, next) => {
 //     const err: ErrorType = new Error('Unhandled Route');
 //     err.statusCode = 404;

@@ -18,6 +18,9 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
         const { userId } = jwt.verify(token, process.env.APP_SECRET);
         next();
     } catch (error) {
+        console.log('error');
+        console.log(error);
+
         return res.status(400).json({
             error: {
                 statusCode: 400,
