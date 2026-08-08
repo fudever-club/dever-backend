@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
 import _ from 'lodash';
 import { Leaderboard } from '../models/LeaderboardModel';
+import { toPublicProfileKey } from '../Utils/userDto';
 const axios = require('axios');
 
 export const getLeaderBoard = async (req: Request, res: Response, next: NextFunction) => {
@@ -13,9 +14,22 @@ export const getLeaderBoard = async (req: Request, res: Response, next: NextFunc
 
         users.sort((a: any, b: any) => b.acSubmissionList.length - a.acSubmissionList.length);
 
+        const leaderboard = users.map((entry: any) => ({
+            leetcodeUsername: entry.leetcodeUsername,
+            acSubmissionList: entry.acSubmissionList,
+            user: entry.userId
+                ? {
+                      firstname: entry.userId.firstname || null,
+                      lastname: entry.userId.lastname || null,
+                      avatar: entry.userId.avatar || null,
+                      profileKey: toPublicProfileKey(entry.userId),
+                  }
+                : null,
+        }));
+
         res.status(200).json({
             status: 'success',
-            data: users,
+            data: leaderboard,
         });
     } catch (error) {
         next(error);

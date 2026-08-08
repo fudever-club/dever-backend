@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { register, login, welcome } from '../controllers/authController';
+import { login, welcome } from '../controllers/authController';
 
 const Router = express.Router();
 
@@ -49,7 +49,6 @@ const Router = express.Router();
  *                         example: Leanne Graham
  */
 Router.route('/').get(welcome);
-Router.route('/register').post(register);
 Router.route('/login').post(login);
 
 module.exports = Router;

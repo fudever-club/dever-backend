@@ -1,23 +1,26 @@
 import express from 'express';
-
 import {
-    editProfile,
     changePassword,
-    deleteUser,
     createManyUsersByCsv,
+    createMember,
+    deleteUser,
+    editProfile,
+    getAllUsers,
+    getUserById,
     resetPasword,
-} from './../controllers/usersController';
-import { getAllUsers, getUserById } from '../controllers/usersController';
-import { verifyToken } from '../middlewares/veryfyToken';
+} from '../controllers/usersController';
+import { optionalAuth, requireAdmin, requireAuth } from '../middlewares/auth';
 
 const Router = express.Router();
-Router.route('/').get(getAllUsers);
-Router.route('/csv').post(createManyUsersByCsv);
-Router.route('/:userId').get(getUserById);
-Router.route('/:userId').patch(editProfile);
-Router.route('/:userId').delete(deleteUser);
-Router.route('/edit/:userId').put(verifyToken, editProfile);
-Router.route('/edit/:userId/password').put(verifyToken, changePassword);
-Router.route('/reset-password/:userId').patch(verifyToken, resetPasword);
+
+Router.route('/').get(optionalAuth, getAllUsers).post(requireAuth, requireAdmin, createMember);
+Router.route('/csv').post(requireAuth, requireAdmin, createManyUsersByCsv);
+Router.route('/:userId')
+    .get(optionalAuth, getUserById)
+    .patch(requireAuth, requireAdmin, editProfile)
+    .delete(requireAuth, requireAdmin, deleteUser);
+Router.route('/edit/:userId').put(requireAuth, requireAdmin, editProfile);
+Router.route('/edit/:userId/password').put(requireAuth, changePassword);
+Router.route('/reset-password/:userId').patch(requireAuth, requireAdmin, resetPasword);
 
 module.exports = Router;

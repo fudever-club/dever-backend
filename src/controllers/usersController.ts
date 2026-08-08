@@ -1,372 +1,325 @@
-import { Request, Response, NextFunction } from 'express';
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-import _, { forEach, update } from 'lodash';
-
+import { NextFunction, Request, Response } from 'express';
+import { randomBytes } from 'crypto';
+import mongoose from 'mongoose';
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
-import mongoose from 'mongoose';
+import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto, toPublicProfileKey, toPublicUserDto } from '../Utils/userDto';
 
-export const createManyUsersByCsv = async (req: Request, res: Response, next: NextFunction) => {
+const bcrypt = require('bcryptjs');
+
+type ProvisioningInput = {
+    email?: unknown;
+    firstname?: unknown;
+    lastname?: unknown;
+    phone?: unknown;
+    mssv?: unknown;
+    MSSV?: unknown;
+};
+
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const makeTemporaryPassword = () => randomBytes(18).toString('base64url');
+
+const memberInput = (input: ProvisioningInput) => ({
+    email: text(input.email).toLowerCase(),
+    firstname: text(input.firstname),
+    lastname: text(input.lastname),
+    phone: text(input.phone) || null,
+    MSSV: text(input.mssv || input.MSSV) || null,
+});
+
+const provisionMember = async (input: ProvisioningInput) => {
+    const member = memberInput(input);
+    if (!member.email || !member.firstname || !member.lastname) {
+        return { error: 'email, firstname and lastname are required' };
+    }
+
+    const exists = await User.findOne({ email: member.email }).select('_id');
+    if (exists) {
+        return { skipped: 'A member with this email already exists' };
+    }
+
+    const temporaryPassword = makeTemporaryPassword();
+    const user = await User.create({
+        ...member,
+        password: temporaryPassword,
+        isAdmin: false,
+        isLeader: false,
+        profileVisibility: DEFAULT_PROFILE_VISIBILITY,
+    });
+
+    return {
+        created: {
+            user: toPrivateUserDto(user),
+            // This is intentionally returned once to the authenticated admin;
+            // it is never stored or returned by any read endpoint.
+            temporaryPassword,
+        },
+    };
+};
+
+/** Admin-only manual member provisioning. Roles and passwords are never accepted from input. */
+export const createMember = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        const result = await provisionMember(req.body || {});
+        if ('error' in result) {
+            return res.status(400).json({ status: 'error', message: result.error });
+        }
+        if ('skipped' in result) {
+            return res.status(409).json({ status: 'error', message: result.skipped });
         }
 
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed to edit this profile',
-            });
-        }
-
-        const { users } = req.body;
-
-        forEach(users, async (user: any) => {
-            console.log('🚀 ~ forEach ~ user:', user);
-            const existingUser = await User.findOne({ email: user?.email });
-            if (existingUser) {
-                console.log(`User with email ${user.email} already exists.`);
-                return;
-            }
-
-            const newUser = new User({
-                email: user?.email,
-                firstname: user?.firstname,
-                lastname: user?.lastname,
-                password: user?.phone,
-                phone: user?.phone,
-                positionId: '664daffb0ff1149197d5e940',
-                departments: ['66424ecbef8dad8c6c304235'],
-                majorId: '6644ce1fd59b62195dd378fd',
-                MSSV: user?.mssv,
-            });
-            await newUser.save();
-            console.log('🚀 ~ forEach ~ newUser:', newUser);
-            console.log('--------------------');
-        });
-
-        res.status(200).json({
-            status: 'success',
-            data: users,
-        });
+        return res.status(201).json({ status: 'success', data: result.created });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
-export const getAllUsers = async (req: any, res: Response, next: NextFunction) => {
+/** Admin-only CSV import. The caller parses the CSV and submits a row array. */
+export const createManyUsersByCsv = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Parse pagination parameters
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 999;
-        const skip = (page - 1) * limit;
+        const rows = req.body?.users;
+        if (!Array.isArray(rows)) {
+            return res.status(400).json({ status: 'error', message: 'users must be an array' });
+        }
 
-        let filter: any = {};
+        const report: Array<Record<string, unknown>> = [];
+        for (let index = 0; index < rows.length; index += 1) {
+            const result = await provisionMember(rows[index] || {});
+            const email = text(rows[index]?.email).toLowerCase() || null;
+            if ('created' in result) {
+                report.push({ row: index + 1, email, created: result.created });
+            } else if ('skipped' in result) {
+                report.push({ row: index + 1, email, skipped: true, reason: result.skipped });
+            } else {
+                report.push({ row: index + 1, email, errors: [result.error] });
+            }
+        }
+
+        const created = report.filter((row) => 'created' in row).length;
+        const skipped = report.filter((row) => row.skipped === true).length;
+        const errors = report.length - created - skipped;
+        return res.status(201).json({
+            status: errors ? 'partial_success' : 'success',
+            data: { created, skipped, errors, rows: report },
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const isAdmin = (res: Response) => Boolean(res.locals.auth?.isAdmin);
+const canSeePrivateUser = (res: Response, user: any) =>
+    isAdmin(res) || res.locals.auth?.userId === user?._id?.toString();
+
+export const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 24, 1), 100);
+        const skip = (page - 1) * limit;
+        const filter: Record<string, unknown> = {};
+        const admin = isAdmin(res);
 
         if (req.query.filter) {
             try {
-                filter = JSON.parse(req.query.filter);
-
-                // Remove any keys with empty string values
-                Object.keys(filter).forEach((key) => {
-                    if (filter[key] === '') {
-                        delete filter[key];
+                const requested = JSON.parse(req.query.filter as string) as Record<string, unknown>;
+                for (const [key, value] of Object.entries(requested)) {
+                    if (value !== '') {
+                        filter[key] = value;
                     }
-                });
-
-                if (filter.departments) {
+                }
+                if (filter.departments && typeof filter.departments === 'string') {
                     filter.departments = {
-                        $in: filter.departments.split(',').map((id: any) => new mongoose.Types.ObjectId(id.trim())),
+                        $in: filter.departments
+                            .split(',')
+                            .map((id) => new mongoose.Types.ObjectId(id.trim())),
                     };
                 }
-            } catch (error) {
-                console.error('Error parsing filter:', error);
+                if (!admin) {
+                    delete filter.MSSV;
+                    delete filter.email;
+                    delete filter.phone;
+                    delete filter.kGeneration;
+                }
+            } catch (_error) {
                 return res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
             }
         }
 
-        console.log(filter);
-
-        let search = req.query.search ? req.query.search.toString() : '';
-
-        // Remove surrounding double quotes if they exist
-        search = search.replace(/^"|"$/g, '');
-
-        if (filter.kGeneration) {
-            const kGeneration = filter.kGeneration;
-            // Create a regex to match MSSV with specified kGeneration at positions 2 and 3
-            const regex = new RegExp(`^[a-zA-Z]{2}${kGeneration}`, 'i');
-            filter.MSSV = { $regex: regex };
-            delete filter.kGeneration; // Remove kGeneration from the filter object
-        }
-
+        const search = typeof req.query.search === 'string' ? req.query.search.replace(/^"|"$/g, '') : '';
         if (search) {
             const searchRegex = new RegExp(search, 'i');
-            filter.$or = [
-                { firstname: searchRegex },
-                { lastname: searchRegex },
-                { email: searchRegex },
-                { nickname: searchRegex },
-            ];
+            filter.$or = admin
+                ? [{ firstname: searchRegex }, { lastname: searchRegex }, { email: searchRegex }, { nickname: searchRegex }]
+                : [{ firstname: searchRegex }, { lastname: searchRegex }, { nickname: searchRegex }];
         }
 
-        console.log('🚀 ~ getAllUsers ~ filter:', filter);
-        // Fetch users with pagination and filtering
-        let users = await User.find(filter)
-            .sort({ isAdmin: -1, isExcellent: -1, updatedAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .populate('majorId')
-            .populate('positionId')
-            .populate('departments')
-            .populate('socials.socialId');
+        const [users, total] = await Promise.all([
+            User.find(filter)
+                .sort({ isAdmin: -1, isExcellent: -1, updatedAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate('majorId')
+                .populate('positionId')
+                .populate('departments')
+                .populate('socials.socialId'),
+            User.countDocuments(filter),
+        ]);
 
-        // users = users.slice(0, limit);
-
-        // Get the total count of documents matching the filter
-        const totalUsers = await User.countDocuments(filter);
-
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             results: users.length,
-            total: totalUsers,
+            total,
             currentPage: page,
-            totalPages: Math.ceil(totalUsers / limit),
-            data: {
-                users: users.map((user: any) => {
-                    const res = _.omit(user.toObject(), ['password']);
-                    return res;
-                }),
-            },
+            totalPages: Math.ceil(total / limit),
+            data: { users: users.map((user: any) => (admin ? toPrivateUserDto(user) : toPublicUserDto(user))) },
         });
     } catch (error) {
-        console.error('Error fetching users:', error);
-        next(error);
+        return next(error);
     }
 };
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        let user = await User.findOne({ nickname: req.params?.userId })
+        const identifier = req.params.userId;
+        const canUseInternalIdentifier = isAdmin(res) || res.locals.auth?.userId === identifier;
+        let user = await User.findOne({ nickname: identifier })
             .populate('majorId')
             .populate('positionId')
             .populate('departments')
             .populate('socials.socialId');
 
-        // If user is not found by nickname, search by _id
-        if (!user) {
-            user = await User.findOne({ _id: req.params?.userId })
+        // A private nickname is not a public profile locator. New public cards
+        // use profileKey instead, so users do not need to opt in to nicknames.
+        if (user && !canSeePrivateUser(res, user) && user.profileVisibility?.nickname !== true) {
+            user = null;
+        }
+
+        if (!user && identifier.startsWith('p_')) {
+            // Existing documents do not require a migration. The collection is
+            // small today; replace this with an indexed random publicProfileId
+            // if the club grows beyond this transitional approach.
+            const candidates = await User.find({}).select('_id');
+            const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === identifier);
+            if (match) {
+                user = await User.findById(match._id)
+                    .populate('majorId')
+                    .populate('positionId')
+                    .populate('departments')
+                    .populate('socials.socialId');
+            }
+        }
+
+        if (!user && canUseInternalIdentifier && mongoose.Types.ObjectId.isValid(identifier)) {
+            user = await User.findById(identifier)
                 .populate('majorId')
                 .populate('positionId')
                 .populate('departments')
                 .populate('socials.socialId');
         }
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
 
-        const leaderbaord = await Leaderboard.findOne({ userId: user._id });
-
-        const response = _.omit(user.toObject(), ['password']);
-
-        res.status(200).json({
+        const leaderboard = await Leaderboard.findOne({ userId: user._id }).select('leetcodeUsername acSubmissionList');
+        const privateAccess = canSeePrivateUser(res, user);
+        const userData = privateAccess ? toPrivateUserDto(user) : toPublicUserDto(user);
+        const canExposeLeetcode = privateAccess || user.profileVisibility?.leetcode === true;
+        const submissions = canExposeLeetcode
+            ? leaderboard?.acSubmissionList
+            : leaderboard?.acSubmissionList?.map((submission: any) => {
+                  const { _id, ...safeSubmission } = submission.toObject ? submission.toObject() : submission;
+                  return safeSubmission;
+              });
+        const leaderboardData = canExposeLeetcode
+            ? { leetcodeUsername: leaderboard?.leetcodeUsername, acSubmissionList: submissions }
+            : {};
+        return res.status(200).json({
             status: 'success',
-            data: {
-                ...response,
-                leetcodeUsername: leaderbaord?.leetcodeUsername,
-                acSubmissionList: leaderbaord?.acSubmissionList,
-            },
+            data: { ...userData, ...leaderboardData },
         });
     } catch (error) {
-        console.log(error);
-
-        next(error);
+        return next(error);
     }
 };
 
 export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { oldPassword, newPassword } = req.body;
-        const { userId } = req.params;
+        const userId = req.params.userId;
+        if (!isAdmin(res) && res.locals.auth?.userId !== userId) {
+            return res.status(403).json({ status: 'error', message: 'You are not allowed to change this password' });
+        }
+        const { oldPassword, newPassword } = req.body || {};
+        if (typeof newPassword !== 'string' || newPassword.length < 6) {
+            return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters' });
+        }
         const user = await User.findById(userId);
-        if (!oldPassword || !newPassword) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Old and new passwords are required',
-            });
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
-        if (newPassword.length < 6) {
-            res.status(400).json({
-                status: 'error',
-                message: 'New password must be at least 6 characters',
-            });
+        if (!isAdmin(res) && (typeof oldPassword !== 'string' || !bcrypt.compareSync(oldPassword, user.password))) {
+            return res.status(400).json({ status: 'error', message: 'Old password is incorrect' });
         }
-        if (oldPassword === newPassword) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Old and new passwords must be different',
-            });
-        }
-        if (!bcrypt.compareSync(oldPassword, user.password)) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Old password is incorrect',
-            });
-        }
-        let passwordHashed = await bcrypt.hashSync(newPassword, 10, function (err: Error, hash: string) {
-            if (err) {
-                return next(err);
-            } else {
-                passwordHashed = hash;
-                // next();
-            }
-        });
-        const response = await User.findByIdAndUpdate(
-            userId,
-            { password: passwordHashed },
-            { new: true, runValidator: true },
-        );
-        res.status(200).json({
-            status: 'success',
-            message: 'Change password successfully',
-        });
-    } catch (err) {}
+
+        user.password = newPassword;
+        await user.save();
+        return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
+    } catch (error) {
+        return next(error);
+    }
 };
 
 export const editProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        const id = req.params.userId;
+        if (!isAdmin(res)) {
+            return res.status(403).json({ status: 'error', message: 'Administrator access is required' });
         }
-
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed to edit this profile',
-            });
+        const updateData = { ...(req.body || {}) };
+        ['_id', 'email', 'password', 'isAdmin', 'isLeader', 'profileVisibility'].forEach((field) => delete updateData[field]);
+        const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
-
-        const { userId: id } = req.params;
-
-        const updateData = _.omit(req.body, ['_id', 'email']);
-
-        const response = await User.findByIdAndUpdate(id, updateData, { new: true, runValidator: true });
-
-        const responseData = _.omit(response.toObject(), ['password']);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Edit profile successfully',
-            data: responseData,
-        });
+        return res.status(200).json({ status: 'success', message: 'Profile updated successfully', data: toPrivateUserDto(user) });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        if (!isAdmin(res)) {
+            return res.status(403).json({ status: 'error', message: 'Administrator access is required' });
         }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
+        const deleted = await User.findByIdAndDelete(req.params.userId);
+        if (!deleted) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
-
-        const { userId: id } = req.params;
-        await User.findByIdAndDelete(id);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Delete user successfully',
-        });
+        return res.status(200).json({ status: 'success', message: 'Member deleted successfully' });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
 export const resetPasword = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        if (!isAdmin(res)) {
+            return res.status(403).json({ status: 'error', message: 'Administrator access is required' });
         }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
+        const temporaryPassword = makeTemporaryPassword();
+        const user = await User.findById(req.params.userId);
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
-
-        const { userId: id } = req.params;
-
-        let passwordHashed = await bcrypt.hashSync('123456', 10, function (err: Error, hash: string) {
-            if (err) {
-                return next(err);
-            } else {
-                passwordHashed = hash;
-            }
-        });
-
-        const response = await User.findByIdAndUpdate(
-            id,
-            { password: passwordHashed },
-            { new: true, runValidator: true },
-        );
-
-        res.status(200).json({
+        user.password = temporaryPassword;
+        await user.save();
+        return res.status(200).json({
             status: 'success',
-            message: 'Reset password successfully',
+            data: { temporaryPassword },
+            message: 'Temporary password generated. Share it through a secure channel.',
         });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };

@@ -1,135 +1,53 @@
 import { ErrorType } from './../middlewares/errorHandler';
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
+import { getJwtSecret } from '../config/auth';
+
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-export const register = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const email = req.body.email;
-
-        const userExist = await User.findOne({ email });
-
-        if (userExist) {
-            const err: ErrorType = new Error('User already exist');
-            err.status = 400;
-            return next(err);
-        }
-
-        let user: any;
-        // const user = new User({
-        //     ...req.body,
-        //     avatar:
-        //         req.body?.avatar ??
-        //         'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
-        // });
-
-        user = await new User({
-            ...req.body,
-            avatar:
-                req.body?.avatar ??
-                'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
-        });
-        await user.save();
-
-        // await bcrypt.hash(req.body.password, 10, async function (err: Error, hash: string) {
-        //     console.log('🚀 ~ req.body.password:', req.body.password);
-        //     if (err) {
-        //         console.log('🚀 ~ err:', err);
-        //         return next(err);
-        //     } else {
-        //         user = await User.create({
-        //             ...req.body,
-        //             password: hash,
-        //             avatar:
-        //                 req.body?.avatar ??
-        //                 'https://img-cdn.pixlr.com/image-generator/history/65bb506dcb310754719cf81f/ede935de-1138-4f66-8ed7-44bd16efc709/medium.webp',
-        //         });
-
-        //         console.log('🚀 ~ user:', user);
-        //     }
-        // });
-
-        res.status(200).json({
-            status: 'success',
-            data: {
-                user,
-            },
-        });
-    } catch (err) {
-        next(err);
-    }
+/**
+ * Kept only for import compatibility. Account provisioning is exclusively
+ * handled by the admin-only users endpoints, so this legacy handler must not
+ * regain a request-body account-creation path.
+ */
+export const register = (_req: Request, _res: Response, next: NextFunction) => {
+    const error: ErrorType = new Error('Public registration has been retired');
+    error.status = 410;
+    return next(error);
 };
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await User.findOne({ email: req.body.email });
-        if (!user) {
-            const err: ErrorType = new Error('Email or Password is not correct');
+        const inputEmail = req.body.email ? req.body.email.trim().toLowerCase() : '';
+        const password = typeof req.body.password === 'string' ? req.body.password : '';
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${inputEmail}$`, 'i') } });
+        if (!user || !password || !bcrypt.compareSync(password, user.password)) {
+            const err: ErrorType = new Error('Email hoặc Mật khẩu không chính xác');
             err.status = 400;
             return next(err);
         }
 
-        console.log('🚀 ~ login ~ req.body.password:', req.body.password);
-        console.log('🚀 ~ login ~ user.password:', user.password);
-
-        if (bcrypt.compareSync(req.body.password, user.password)) {
-            const token = jwt.sign({ userId: user._id, isAdmin: user?.isAdmin }, process.env.APP_SECRET, {
-                expiresIn: '7d',
-            });
-            const { _id, firstname, lastname, email, avatar, bio, isAdmin } = user;
-            res.status(200).json({
-                status: 'success',
-                data: {
-                    user: {
-                        _id,
-                        firstname,
-                        lastname,
-                        email,
-                        avatar,
-                        bio,
-                        isAdmin,
-                    },
-                    token,
-                },
-            });
-        } else {
-            const err: ErrorType = new Error('Email or Password is not correct');
-            err.status = 400;
-            return next(err);
-        }
-    } catch (error) {}
-};
-
-export const welcome = (req: Request, res: Response, next: NextFunction) => {
-    try {
-        res.status(200).json({
+        const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
+        const { _id, firstname, lastname, email, avatar, description, isAdmin } = user;
+        return res.status(200).json({
             status: 'success',
-            message: 'Welcome to the FU-DEVER',
+            data: {
+                user: { _id, firstname, lastname, email, avatar, description, isAdmin },
+                token,
+            },
         });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
-export const lowercaseEmail = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        console.log('-----');
+export const welcome = (_req: Request, res: Response) =>
+    res.status(200).json({ status: 'success', message: 'Welcome to the FU-DEVER' });
 
-        const users = await User.find({});
-        const updatePromises = users.map(async (user: any) => {
-            if (user.email) {
-                user.email = user.email.toLowerCase();
-                console.log(user);
-
-                await user.save();
-            }
-        });
-        await Promise.all(updatePromises);
-        res.status(200).json({
-            status: 'success',
-            message: 'Lowercase email successfully',
-        });
-    } catch (error) {
-        next(error);
-    }
+// Kept for compatibility with existing imports; intentionally no longer exposed by a route.
+export const lowercaseEmail = async (_req: Request, _res: Response, next: NextFunction) => {
+    const error: ErrorType = new Error('This maintenance action is disabled');
+    error.status = 410;
+    return next(error);
 };

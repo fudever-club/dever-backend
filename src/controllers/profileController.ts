@@ -1,114 +1,99 @@
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { User } from '../models/UserModel';
-import _ from 'lodash';
-const jwt = require('jsonwebtoken');
+import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto } from '../Utils/userDto';
+
 const bcrypt = require('bcryptjs');
+
+const SELF_EDITABLE_FIELDS = new Set([
+    'avatar',
+    'nickname',
+    'phone',
+    'firstname',
+    'lastname',
+    'description',
+    'dob',
+    'hometown',
+    'job',
+    'workplace',
+    'school',
+    'majorId',
+    'gen',
+    'MSSV',
+    'socials',
+    'skills',
+    'favourites',
+]);
+
+const VISIBILITY_FIELDS = Object.keys(DEFAULT_PROFILE_VISIBILITY);
+
+const profileUpdate = (body: Record<string, unknown>) => {
+    const update: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(body)) {
+        if (SELF_EDITABLE_FIELDS.has(field)) {
+            update[field] = value;
+        }
+    }
+
+    if (body.profileVisibility && typeof body.profileVisibility === 'object' && !Array.isArray(body.profileVisibility)) {
+        const requested = body.profileVisibility as Record<string, unknown>;
+        update.profileVisibility = VISIBILITY_FIELDS.reduce((visibility, field) => {
+            visibility[field] = requested[field] === true;
+            return visibility;
+        }, {} as Record<string, boolean>);
+    }
+
+    return update;
+};
 
 export const editProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication is required' });
         }
-        const token = Authorization.replace('Bearer ', '');
-
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const updateData = _.omit(req.body, [
-            '_id',
-            'email',
-            'positionId',
-            'isAdmin',
-            'isExcellent',
-            'departments',
-            '',
-        ]);
-
-        const response = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidator: true })
+        const update = profileUpdate(req.body || {});
+        const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
             .populate('departments')
             .populate('socials.socialId');
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
 
-        const responseData = _.omit(response.toObject(), ['password']);
-
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
-            message: 'Edit profile successfully',
-            data: responseData,
+            message: 'Profile updated successfully',
+            data: toPrivateUserDto(user),
         });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
 export const changePassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
+        const userId = res.locals.auth?.userId;
+        const { oldPassword, newPassword } = req.body || {};
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication is required' });
         }
-        const token = Authorization.replace('Bearer ', '');
-
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-        const user = await User.findById(userId);
-
-        const { oldPassword, newPassword } = req.body;
-
-        if (!oldPassword || !newPassword) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Old and new passwords are required',
-            });
+        if (typeof oldPassword !== 'string' || typeof newPassword !== 'string') {
+            return res.status(400).json({ status: 'error', message: 'Old and new passwords are required' });
         }
         if (newPassword.length < 6) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'New password must be at least 6 characters',
-            });
+            return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters' });
         }
         if (oldPassword === newPassword) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Old and new passwords must be different',
-            });
-        }
-        if (!bcrypt.compareSync(oldPassword, user.password)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Old password is incorrect',
-            });
+            return res.status(400).json({ status: 'error', message: 'New password must be different' });
         }
 
-        let passwordHashed = await bcrypt.hashSync(newPassword, 10, function (err: Error, hash: string) {
-            if (err) {
-                return next(err);
-            } else {
-                passwordHashed = hash;
-                // next();
-            }
-        });
-
-        const response = await User.findByIdAndUpdate(
-            userId,
-            { password: passwordHashed },
-            { new: true, runValidator: true },
-        );
-        res.status(200).json({
-            status: 'success',
-            message: 'Change password successfully',
-        });
+        const user = await User.findById(userId);
+        if (!user || !bcrypt.compareSync(oldPassword, user.password)) {
+            return res.status(400).json({ status: 'error', message: 'Old password is incorrect' });
+        }
+        user.password = newPassword;
+        await user.save();
+        return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };

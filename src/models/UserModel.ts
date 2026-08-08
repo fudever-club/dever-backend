@@ -112,6 +112,21 @@ const userSchema = mongoose.Schema(
             type: String,
             default: null,
         },
+        profileVisibility: {
+            email: { type: Boolean, default: false },
+            phone: { type: Boolean, default: false },
+            MSSV: { type: Boolean, default: false },
+            dob: { type: Boolean, default: false },
+            hometown: { type: Boolean, default: false },
+            school: { type: Boolean, default: false },
+            workplace: { type: Boolean, default: false },
+            job: { type: Boolean, default: false },
+            socials: { type: Boolean, default: false },
+            skills: { type: Boolean, default: false },
+            favourites: { type: Boolean, default: false },
+            description: { type: Boolean, default: false },
+            nickname: { type: Boolean, default: false },
+        },
         socials: [
             {
                 url: {
@@ -131,31 +146,24 @@ const userSchema = mongoose.Schema(
 
 userSchema.pre('save', async function (this: any, next: NextFunction) {
     const user = this;
-    // console.log('🚀 ~ user:', user);
-    // Hash password if it's new or has been modified
-    if (user.isModified('password')) {
-        await bcrypt.hash(user.password, 10, function (err: Error, hash: string) {
-            if (err) {
-                console.log('🚀 ~ err:', err);
-                return next(err);
-            } else {
-                user.password = hash;
-                console.log('🚀 ~ user:', user);
-            }
-        });
+    try {
+        if (user.isModified('password')) {
+            user.password = await bcrypt.hash(user.password, 10);
+        }
+        return next();
+    } catch (error) {
+        return next(error as Error);
     }
+});
 
-    // Validate nickname uniqueness if it is set
-    if (user.isModified('nickname') && user.nickname) {
-        console.log('???????');
-
-        const existingUser = await mongoose.models.User.findOne({ nickname: user.nickname });
-        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+userSchema.pre('save', async function (this: any, next: NextFunction) {
+    if (this.isModified('nickname') && this.nickname) {
+        const existingUser = await mongoose.models.User.findOne({ nickname: this.nickname });
+        if (existingUser && existingUser._id.toString() !== this._id.toString()) {
             return next(new Error('Nickname is already in use'));
         }
     }
-
-    next();
+    return next();
 });
 
 userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
@@ -194,5 +202,8 @@ userSchema.pre('save', async function (this: any, next: NextFunction) {
 //     }
 //     next();
 // });
+
+userSchema.index({ firstname: 'text', lastname: 'text', email: 'text', MSSV: 'text' });
+userSchema.index({ positionId: 1, majorId: 1, gen: 1 });
 
 export const User = mongoose.model('User', userSchema);

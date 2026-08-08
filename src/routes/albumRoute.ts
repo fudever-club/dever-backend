@@ -9,14 +9,15 @@ import {
     getAlbumBySlug,
     getAllAlbums,
 } from '../controllers/albumController';
+import { requireAdmin, requireAuth } from '../middlewares/auth';
 
 const Router = express.Router();
-Router.route('/').post(createAlbum);
+Router.route('/').post(requireAuth, requireAdmin, createAlbum);
 Router.route('/').get(getAllAlbums);
 Router.route('/:slug').get(getAlbumBySlug);
-Router.route('/:id').patch(editAlbumById);
-Router.route('/:slug').delete(deleteAlbumBySlug);
-Router.route('/:slug').post(addManyImageToAlbum);
-Router.route('/:slug/delete-images').delete(deleteManyImageAlbum);
+Router.route('/:id').patch(requireAuth, requireAdmin, editAlbumById);
+Router.route('/:slug').delete(requireAuth, requireAdmin, deleteAlbumBySlug);
+Router.route('/:slug').post(requireAuth, requireAdmin, addManyImageToAlbum);
+Router.route('/:slug/delete-images').delete(requireAuth, requireAdmin, deleteManyImageAlbum);
 
 module.exports = Router;
