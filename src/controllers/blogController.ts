@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Blog } from '../models/BlogModel';
+import { User } from '../models/UserModel';
 
 export const getAllBlogs = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -26,10 +27,17 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
     try {
         const title = req.body.title || 'Bài viết mới';
         const slug = req.body.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
+        const authorUser = await User.findById(res.locals.auth?.userId).select('firstname lastname avatar');
+        const { author: _untrustedAuthor, slug: _untrustedSlug, ...safeRequestBody } = req.body;
         
         const blogData = {
-            ...req.body,
+            ...safeRequestBody,
             slug,
+            author: {
+                name: [authorUser?.firstname, authorUser?.lastname].filter(Boolean).join(' ') || 'Ban quản trị DEVER',
+                role: 'FU-DEVER Admin',
+                avatar: authorUser?.avatar || '/images/avatar/avatar.jpg',
+            },
         };
 
         const blog = await Blog.create(blogData);
