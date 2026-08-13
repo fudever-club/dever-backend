@@ -3,7 +3,9 @@ import { randomBytes } from 'crypto';
 import mongoose from 'mongoose';
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
+import { Position } from '../models/PositionModel';
 import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto, toPublicProfileKey, toPublicUserDto } from '../Utils/userDto';
+import { PRESIDENT_POSITION, VICE_PRESIDENT_POSITION } from '../middlewares/auth';
 
 const bcrypt = require('bcryptjs');
 
@@ -109,6 +111,11 @@ export const createManyUsersByCsv = async (req: Request, res: Response, next: Ne
 };
 
 const isAdmin = (res: Response) => Boolean(res.locals.auth?.isAdmin);
+const isPresident = (res: Response) =>
+    Boolean(res.locals.auth?.isAdmin && res.locals.auth?.positionConstant === PRESIDENT_POSITION);
+const isExecutivePosition = (position: any) =>
+    [PRESIDENT_POSITION, VICE_PRESIDENT_POSITION].includes(position?.constant);
+const isPresidentPosition = (position: any) => position?.constant === PRESIDENT_POSITION;
 const canSeePrivateUser = (res: Response, user: any) =>
     isAdmin(res) || res.locals.auth?.userId === user?._id?.toString();
 
@@ -276,7 +283,7 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
             return res.status(403).json({ status: 'error', message: 'Administrator access is required' });
         }
         const updateData = { ...(req.body || {}) };
-        ['_id', 'email', 'password', 'isAdmin', 'isLeader', 'profileVisibility'].forEach((field) => delete updateData[field]);
+        ['_id', 'email', 'password', 'isAdmin', 'isLeader', 'positionId', 'profileVisibility'].forEach((field) => delete updateData[field]);
         const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
@@ -287,15 +294,153 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
     }
 };
 
+/**
+ * Admin-only role mutation. Roles are intentionally kept separate from profile
+ * updates so importing or editing member details can never silently grant
+ * elevated access.
+ */
+export const setUserAdminRole = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const requestedAdmin = req.body?.isAdmin;
+        const updatesAdmin = typeof requestedAdmin === 'boolean';
+        if (!updatesAdmin) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'isAdmin must be a boolean',
+            });
+        }
+
+        if (!isPresident(res)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only a President can change administrator access',
+            });
+        }
+
+        const user = await User.findById(req.params.userId).populate('positionId');
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
+
+        if (user.isAdmin === requestedAdmin) {
+            return res.status(200).json({
+                status: 'success',
+                message: 'Administrator access is already up to date',
+                data: toPrivateUserDto(user),
+            });
+        }
+
+        if (!requestedAdmin && isPresidentPosition(user.positionId)) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'A President must retain administrator access',
+            });
+        }
+
+        user.isAdmin = requestedAdmin;
+        await user.save();
+        return res.status(200).json({
+            status: 'success',
+            message: requestedAdmin ? 'Administrator access granted' : 'Administrator access revoked',
+            data: toPrivateUserDto(user),
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+export const setUserPosition = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const positionId = req.body?.positionId;
+        if (typeof positionId !== 'string' || !mongoose.Types.ObjectId.isValid(positionId)) {
+            return res.status(400).json({ status: 'error', message: 'A valid positionId is required' });
+        }
+        const [user, nextPosition] = await Promise.all([
+            User.findById(req.params.userId).populate('positionId'),
+            Position.findById(positionId),
+        ]);
+        if (!user) return res.status(404).json({ status: 'error', message: 'Member not found' });
+        if (!nextPosition) return res.status(404).json({ status: 'error', message: 'Position not found' });
+
+        const currentPosition = user.positionId as any;
+        if ((isExecutivePosition(currentPosition) || isExecutivePosition(nextPosition)) && !isPresident(res)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only a President can assign Executive Committee titles',
+            });
+        }
+        if (isPresidentPosition(currentPosition) && !isPresidentPosition(nextPosition)) {
+            const presidentCount = await User.countDocuments({ positionId: currentPosition._id });
+            if (presidentCount <= 1) {
+                return res.status(409).json({ status: 'error', message: 'The final President title cannot be removed' });
+            }
+        }
+
+        user.positionId = nextPosition._id;
+        if (isPresidentPosition(nextPosition)) user.isAdmin = true;
+        await user.save();
+        await user.populate('positionId');
+        return res.status(200).json({ status: 'success', message: 'Position updated successfully', data: toPrivateUserDto(user) });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+export const setUserTeamLeadership = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const isLeader = req.body?.isLeader;
+        if (typeof isLeader !== 'boolean') {
+            return res.status(400).json({ status: 'error', message: 'isLeader must be a boolean' });
+        }
+        const user = await User.findByIdAndUpdate(req.params.userId, { isLeader }, { new: true, runValidators: true });
+        if (!user) return res.status(404).json({ status: 'error', message: 'Member not found' });
+        return res.status(200).json({
+            status: 'success',
+            message: isLeader ? 'Team leadership assigned' : 'Team leadership removed',
+            data: toPrivateUserDto(user),
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         if (!isAdmin(res)) {
             return res.status(403).json({ status: 'error', message: 'Administrator access is required' });
         }
-        const deleted = await User.findByIdAndDelete(req.params.userId);
-        if (!deleted) {
+        const user = await User.findById(req.params.userId).populate('positionId').select('isAdmin positionId');
+        if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
+        if (isExecutivePosition(user.positionId) && !isPresident(res)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only a President can delete Executive Committee accounts',
+            });
+        }
+        if (isPresidentPosition(user.positionId)) {
+            if (!isPresident(res)) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Only a President can delete a President account',
+                });
+            }
+            const presidentCount = await User.countDocuments({ positionId: (user.positionId as any)._id });
+            if (presidentCount <= 1) {
+                return res.status(409).json({
+                    status: 'error',
+                    message: 'The final President cannot be deleted',
+                });
+            }
+        }
+        if (user.isAdmin && !isPresident(res)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only a President can delete an administrator account',
+            });
+        }
+        await User.findByIdAndDelete(req.params.userId);
         return res.status(200).json({ status: 'success', message: 'Member deleted successfully' });
     } catch (error) {
         return next(error);

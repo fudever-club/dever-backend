@@ -4,13 +4,14 @@ import _ from 'lodash';
 const jwt = require('jsonwebtoken');
 import { getJwtSecret } from '../config/auth';
 import { toPrivateUserDto } from '../Utils/userDto';
+import { Position } from '../models/PositionModel';
 
 export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { token } = req.body;
         const { userId } = jwt.verify(token, getJwtSecret());
 
-        const user = await User.findById({ _id: userId });
+        const user = await User.findById({ _id: userId }).populate({ path: 'positionId', model: Position });
 
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });

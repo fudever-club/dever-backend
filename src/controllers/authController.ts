@@ -21,7 +21,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     try {
         const inputEmail = req.body.email ? req.body.email.trim().toLowerCase() : '';
         const password = typeof req.body.password === 'string' ? req.body.password : '';
-        const user = await User.findOne({ email: { $regex: new RegExp(`^${inputEmail}$`, 'i') } });
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${inputEmail}$`, 'i') } }).populate('positionId');
         if (!user || !password || !bcrypt.compareSync(password, user.password)) {
             const err: ErrorType = new Error('Email hoặc Mật khẩu không chính xác');
             err.status = 400;
@@ -29,11 +29,11 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         }
 
         const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
-        const { _id, firstname, lastname, email, avatar, description, isAdmin } = user;
+        const { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId } = user;
         return res.status(200).json({
             status: 'success',
             data: {
-                user: { _id, firstname, lastname, email, avatar, description, isAdmin },
+                user: { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId },
                 token,
             },
         });

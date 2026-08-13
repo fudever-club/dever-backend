@@ -1,12 +1,17 @@
 import { NextFunction, Request, Response } from 'express';
 import { getJwtSecret } from '../config/auth';
 import { User } from '../models/UserModel';
+import { Position } from '../models/PositionModel';
 
 const jwt = require('jsonwebtoken');
+
+export const PRESIDENT_POSITION = 'CHUNHIEM';
+export const VICE_PRESIDENT_POSITION = 'PHOCHUNHIEM';
 
 export interface AuthContext {
     userId: string;
     isAdmin: boolean;
+    positionConstant: string | null;
 }
 
 const unauthorized = (res: Response, message = 'Authentication is required') =>
@@ -36,14 +41,20 @@ const authenticate = async (req: Request): Promise<AuthContext | null> => {
         return null;
     }
 
-    // Do not trust the role embedded in a long-lived token. The current role
-    // is always read from MongoDB so revoking admin access takes effect now.
-    const user = await User.findById(payload.userId).select('_id isAdmin');
+    // Do not trust roles embedded in a long-lived token. The current access
+    // flag and organization title are always read from MongoDB.
+    const user = await User.findById(payload.userId)
+        .select('_id isAdmin positionId')
+        .populate({ path: 'positionId', model: Position, select: 'constant' });
     if (!user) {
         return null;
     }
 
-    return { userId: user._id.toString(), isAdmin: Boolean(user.isAdmin) };
+    return {
+        userId: user._id.toString(),
+        isAdmin: Boolean(user.isAdmin),
+        positionConstant: (user.positionId as any)?.constant || null,
+    };
 };
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
@@ -78,6 +89,18 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
         return res.status(403).json({
             status: 'error',
             message: 'Administrator access is required',
+        });
+    }
+
+    return next();
+};
+
+export const requirePresident = (req: Request, res: Response, next: NextFunction) => {
+    const auth = res.locals.auth as AuthContext | undefined;
+    if (!auth?.isAdmin || auth.positionConstant !== PRESIDENT_POSITION) {
+        return res.status(403).json({
+            status: 'error',
+            message: 'President access is required',
         });
     }
 

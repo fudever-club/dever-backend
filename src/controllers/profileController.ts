@@ -52,6 +52,12 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
             return res.status(401).json({ status: 'error', message: 'Authentication is required' });
         }
         const update = profileUpdate(req.body || {});
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'At least one editable profile field is required',
+            });
+        }
         const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
             .populate('departments')
             .populate('socials.socialId');
