@@ -8,13 +8,19 @@ const resourceSchema = mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ['Slide', 'Source Code', 'Ebook / PDF'],
             default: 'Slide',
         },
         category: {
             type: String,
-            enum: ['Web Dev', 'Backend', 'Algorithm', 'AI / Data'],
-            default: 'Web Dev',
+            default: 'Slide Workshop',
+        },
+        author: {
+            type: String,
+            default: 'Ban Chuyên Môn FU-DEVER',
+        },
+        description: {
+            type: String,
+            default: '',
         },
         fileUrl: {
             type: String,
@@ -23,6 +29,21 @@ const resourceSchema = mongoose.Schema(
         size: {
             type: String,
             default: 'Drive Link',
+        },
+        fileName: {
+            type: String,
+            default: null,
+        },
+        mimeType: {
+            type: String,
+            default: null,
+        },
+        // Uploaded files are deliberately excluded from collection reads.
+        // They are only loaded by the authenticated download endpoint.
+        fileData: {
+            type: String,
+            default: null,
+            select: false,
         },
     },
     { timestamps: true },

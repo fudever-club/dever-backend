@@ -1,10 +1,34 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { Blog } from '../models/BlogModel';
 import { User } from '../models/UserModel';
 
+const calculateReadTime = (content: string): string => {
+    if (!content) return '1 phút đọc';
+    const words = content.trim().split(/\s+/).length;
+    const minutes = Math.max(1, Math.ceil(words / 200));
+    return `${minutes} phút đọc`;
+};
+
 export const getAllBlogs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const blogs = await Blog.find({ status: 'published' }).sort({ createdAt: -1 });
+        const { category, tag, search } = req.query;
+        const filter: any = { status: 'published' };
+
+        if (category && category !== 'All') {
+            filter.category = category;
+        }
+        if (tag) {
+            filter.tags = tag;
+        }
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { excerpt: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const blogs = await Blog.find(filter).sort({ createdAt: -1 });
         res.status(200).json({
             status: 'success',
             results: blogs.length,
@@ -17,27 +41,102 @@ export const getAllBlogs = async (req: Request, res: Response, next: NextFunctio
 
 export const getBlogBySlug = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const blog = await Blog.findOne({ slug: req.params.slug, status: 'published' });
+        const auth = res.locals.auth;
+        const rawParam = req.params.slug;
+        
+        let blog = await Blog.findOne({ slug: rawParam });
+
+        if (!blog) {
+            try {
+                const decoded = decodeURIComponent(rawParam);
+                blog = await Blog.findOne({ slug: decoded });
+            } catch (e) {}
+        }
+
+        if (!blog && mongoose.Types.ObjectId.isValid(rawParam)) {
+            blog = await Blog.findById(rawParam);
+        }
+
         if (!blog) return res.status(404).json({ status: 'error', message: 'Blog not found' });
+
+        // If unpublished, only author or admin can view
+        if (blog.status !== 'published') {
+            const isAuthor = auth?.userId && blog.authorId && blog.authorId.toString() === auth.userId.toString();
+            const isAdmin = Boolean(auth?.isAdmin);
+            if (!isAuthor && !isAdmin) {
+                return res.status(404).json({ status: 'error', message: 'Blog not found' });
+            }
+        }
+
         return res.status(200).json({ status: 'success', data: blog });
     } catch (error) { return next(error); }
 };
 
+export const getMyBlogs = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication required' });
+        }
+
+        const blogs = await Blog.find({ authorId: userId }).sort({ updatedAt: -1 });
+        return res.status(200).json({
+            status: 'success',
+            results: blogs.length,
+            data: blogs,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const createBlog = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const title = req.body.title || 'Bài viết mới';
-        const slug = req.body.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now();
-        const authorUser = await User.findById(res.locals.auth?.userId).select('firstname lastname avatar');
+        const userId = res.locals.auth?.userId;
+        const isAdmin = Boolean(res.locals.auth?.isAdmin);
+
+        const title = (req.body.title || 'Bài viết mới').trim();
+        const baseSlug = title
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, '');
+        const slug = (baseSlug || 'post') + '-' + Date.now().toString(36);
+
+        const authorUser = await User.findById(userId).select('firstname lastname avatar positionId');
+        const authorName = [authorUser?.firstname, authorUser?.lastname].filter(Boolean).join(' ') || 'Thành viên DEVER';
+        const authorRole = isAdmin ? 'Ban Quản Trị' : 'Thành viên DEVER';
+
         const { author: _untrustedAuthor, slug: _untrustedSlug, ...safeRequestBody } = req.body;
         
+        // Members submit as draft or pending_review; Admins can publish directly if status is 'published'
+        let initialStatus = 'draft';
+        if (req.body.status === 'pending_review' || req.body.status === 'draft') {
+            initialStatus = req.body.status;
+        } else if (isAdmin && req.body.status === 'published') {
+            initialStatus = 'published';
+        } else if (!isAdmin && req.body.submitForReview) {
+            initialStatus = 'pending_review';
+        }
+
         const blogData = {
             ...safeRequestBody,
+            title,
             slug,
+            content: req.body.content || '',
+            excerpt: req.body.excerpt || (req.body.content ? req.body.content.slice(0, 150) + '...' : ''),
+            category: req.body.category || 'Web & Frontend',
+            tags: Array.isArray(req.body.tags) ? req.body.tags : [],
+            readTime: calculateReadTime(req.body.content || ''),
+            authorId: userId,
             author: {
-                name: [authorUser?.firstname, authorUser?.lastname].filter(Boolean).join(' ') || 'Ban quản trị DEVER',
-                role: 'FU-DEVER Admin',
+                name: authorName,
+                role: authorRole,
                 avatar: authorUser?.avatar || '/images/avatar/avatar.jpg',
             },
+            status: initialStatus,
+            reviewNotes: '',
         };
 
         const blog = await Blog.create(blogData);
@@ -50,16 +149,141 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
     }
 };
 
-export const likeBlog = async (req: Request, res: Response, next: NextFunction) => {
+export const updateBlog = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const blog = await Blog.findByIdAndUpdate(
-            req.params.id,
-            { $inc: { likes: 1 } },
-            { new: true }
-        );
+        const userId = res.locals.auth?.userId;
+        const isAdmin = Boolean(res.locals.auth?.isAdmin);
+
+        const blog = await Blog.findById(req.params.id);
+        if (!blog) {
+            return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        const isAuthor = blog.authorId && blog.authorId.toString() === userId?.toString();
+        if (!isAuthor && !isAdmin) {
+            return res.status(403).json({ status: 'error', message: 'Permission denied' });
+        }
+
+        // Author can only update draft or changes_requested posts
+        if (!isAdmin && isAuthor && blog.status !== 'draft' && blog.status !== 'changes_requested') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Không thể chỉnh sửa bài viết đang trong quá trình chờ duyệt hoặc đã xuất bản',
+            });
+        }
+
+        const updates: any = {};
+        if (req.body.title) updates.title = req.body.title;
+        if (req.body.content !== undefined) {
+            updates.content = req.body.content;
+            updates.readTime = calculateReadTime(req.body.content);
+        }
+        if (req.body.excerpt !== undefined) updates.excerpt = req.body.excerpt;
+        if (req.body.category !== undefined) updates.category = req.body.category;
+        if (req.body.tags !== undefined) updates.tags = req.body.tags;
+        if (req.body.coverImage !== undefined) updates.coverImage = req.body.coverImage;
+
+        if (req.body.status) {
+            if (isAdmin) {
+                updates.status = req.body.status;
+            } else if (['draft', 'pending_review'].includes(req.body.status)) {
+                updates.status = req.body.status;
+            }
+        }
+
+        const updatedBlog = await Blog.findByIdAndUpdate(req.params.id, updates, { new: true });
+        return res.status(200).json({
+            status: 'success',
+            data: updatedBlog,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getReviewQueue = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const blogs = await Blog.find({
+            status: { $in: ['pending_review', 'changes_requested', 'draft'] },
+        }).sort({ updatedAt: -1 });
+
         res.status(200).json({
             status: 'success',
+            results: blogs.length,
+            data: blogs,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const reviewBlog = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { status, reviewNotes } = req.body;
+        if (!['published', 'changes_requested', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid review status. Must be published, changes_requested, or rejected',
+            });
+        }
+
+        const blog = await Blog.findByIdAndUpdate(
+            req.params.id,
+            {
+                status,
+                reviewNotes: reviewNotes || '',
+                reviewedBy: res.locals.auth?.userId,
+                reviewedAt: new Date(),
+            },
+            { new: true }
+        );
+
+        if (!blog) {
+            return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `Bài viết đã được cập nhật trạng thái: ${status}`,
             data: blog,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const likeBlog = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        const blog = await Blog.findById(req.params.id);
+        if (!blog) {
+            return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        let isLiked = false;
+        if (userId && Array.isArray(blog.likedUsers)) {
+            const index = blog.likedUsers.findIndex((id: any) => id.toString() === userId.toString());
+            if (index > -1) {
+                blog.likedUsers.splice(index, 1);
+                blog.likes = Math.max(0, blog.likes - 1);
+                isLiked = false;
+            } else {
+                blog.likedUsers.push(userId);
+                blog.likes += 1;
+                isLiked = true;
+            }
+        } else {
+            blog.likes += 1;
+            isLiked = true;
+        }
+
+        await blog.save();
+        res.status(200).json({
+            status: 'success',
+            data: {
+                likes: blog.likes,
+                isLiked,
+            },
         });
     } catch (error) {
         next(error);
@@ -68,6 +292,19 @@ export const likeBlog = async (req: Request, res: Response, next: NextFunction) 
 
 export const deleteBlog = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const userId = res.locals.auth?.userId;
+        const isAdmin = Boolean(res.locals.auth?.isAdmin);
+
+        const blog = await Blog.findById(req.params.id);
+        if (!blog) {
+            return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        const isAuthor = blog.authorId && blog.authorId.toString() === userId?.toString();
+        if (!isAuthor && !isAdmin) {
+            return res.status(403).json({ status: 'error', message: 'Permission denied' });
+        }
+
         await Blog.findByIdAndDelete(req.params.id);
         res.status(200).json({
             status: 'success',
@@ -77,3 +314,4 @@ export const deleteBlog = async (req: Request, res: Response, next: NextFunction
         next(error);
     }
 };
+

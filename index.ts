@@ -20,6 +20,10 @@ const resourceRoute = require('./src/routes/resourceRoute');
 const blogRoute = require('./src/routes/blogRoute');
 const projectLabRoute = require('./src/routes/projectLabRoute');
 const alumniRoute = require('./src/routes/alumniRoute');
+const uploadRoute = require('./src/routes/uploadRoute');
+const searchRoute = require('./src/routes/searchRoute');
+const openSourceRoute = require('./src/routes/openSourceRoute');
+const gamificationRoute = require('./src/routes/gamificationRoute');
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -36,10 +40,28 @@ const server = require('http').Server(app);
 // development override when PORT is not supplied.
 const port = Number(process.env.PORT || process.env.APP_PORT || 5000);
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+const defaultAllowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3002',
+    'http://localhost:3003',
+    'http://127.0.0.1:3003',
+    'https://fu-dever-landingpage-v2.vercel.app',
+    'https://dever-client-taupe.vercel.app',
+    'https://dever-admin-lac.vercel.app',
+    'https://dashboard.fu-dever.com',
+    'https://admin.fu-dever.com',
+    'https://fu-dever.com',
+    'https://www.fu-dever.com',
+    'https://dever-landing.fu-dever.workers.dev',
+    'https://dever-admin.fu-dever.workers.dev',
+    'https://dever-client.fu-dever.workers.dev',
+];
+
+const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : defaultAllowedOrigins;
 
 app.use(
     cors({
@@ -48,12 +70,25 @@ app.use(
             if (!origin || allowedOrigins.includes(origin)) {
                 return callback(null, true);
             }
+            // Allow dynamic Vercel / Railway / Cloudflare preview domains
+            if (
+                /\.vercel\.app$/.test(origin) ||
+                /\.fu-dever\.com$/.test(origin) ||
+                /\.up\.railway\.app$/.test(origin) ||
+                /\.workers\.dev$/.test(origin)
+            ) {
+                return callback(null, true);
+            }
             return callback(new Error('Origin is not allowed by CORS'));
         },
+        credentials: true,
     }),
 );
 
-app.use(express.json());
+// Resource uploads are stored as encoded document bytes. Keep this below the
+// MongoDB document limit while allowing the 8 MB file limit enforced by the
+// resource controller after base64 encoding.
+app.use(express.json({ limit: '12mb' }));
 
 // Liveness is intentionally independent of MongoDB so load balancers can tell
 // that the process is running while the database is reconnecting.
@@ -96,6 +131,11 @@ app.use('/api/v1/blog', blogRoute);
 app.use('/api/v1/blogs', blogRoute);
 app.use('/api/v1/project-lab', projectLabRoute);
 app.use('/api/v1/alumni', alumniRoute);
+app.use('/api/v1/opensource-projects', openSourceRoute);
+app.use('/api/v1/open-source', openSourceRoute);
+app.use('/api/v1/gamification', gamificationRoute);
+app.use('/api/v1/upload', uploadRoute);
+app.use('/api/v1/search', searchRoute);
 
 // Register documentation before the catch-all 404 handler. Previously this
 // function ran inside the listen callback, after the wildcard route had

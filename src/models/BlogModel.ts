@@ -22,6 +22,14 @@ const blogSchema = mongoose.Schema(
             type: String,
             default: 'Web & Frontend',
         },
+        tags: {
+            type: [String],
+            default: [],
+        },
+        authorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        },
         author: {
             name: { type: String, default: 'Thành viên DEVER' },
             role: { type: String, default: 'Member' },
@@ -35,17 +43,34 @@ const blogSchema = mongoose.Schema(
             type: Number,
             default: 0,
         },
+        likedUsers: {
+            type: [mongoose.Schema.Types.ObjectId],
+            ref: 'User',
+            default: [],
+        },
         coverImage: {
             type: String,
             default: '',
         },
         status: {
             type: String,
-            enum: ['published', 'draft'],
-            default: 'published',
+            enum: ['published', 'draft', 'pending_review', 'changes_requested', 'rejected'],
+            default: 'draft',
+        },
+        reviewNotes: {
+            type: String,
+            default: '',
+        },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        },
+        reviewedAt: {
+            type: Date,
         },
     },
     { timestamps: true },
 );
 
 export const Blog = mongoose.model('Blog', blogSchema);
+

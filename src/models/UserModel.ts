@@ -140,6 +140,26 @@ const userSchema = mongoose.Schema(
                 },
             },
         ],
+        exp: {
+            type: Number,
+            default: 150,
+            min: 0,
+        },
+        streakDays: {
+            type: Number,
+            default: 1,
+            min: 0,
+        },
+        lastCheckinDate: {
+            type: Date,
+            default: null,
+        },
+        unlockedBadges: [
+            {
+                badgeId: { type: String, required: true },
+                unlockedAt: { type: Date, default: Date.now },
+            },
+        ],
     },
     { timestamps: true },
 );

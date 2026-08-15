@@ -1,11 +1,26 @@
 import express from 'express';
-import { getAllBlogs, getBlogBySlug, createBlog, likeBlog, deleteBlog } from '../controllers/blogController';
-import { requireAdmin, requireAuth } from '../middlewares/auth';
+import {
+    getAllBlogs,
+    getBlogBySlug,
+    getMyBlogs,
+    createBlog,
+    updateBlog,
+    deleteBlog,
+    getReviewQueue,
+    reviewBlog,
+    likeBlog,
+} from '../controllers/blogController';
+import { requireAdmin, requireAuth, optionalAuth } from '../middlewares/auth';
 
 const Router = express.Router();
-Router.route('/').get(getAllBlogs).post(requireAuth, requireAdmin, createBlog);
-Router.route('/slug/:slug').get(getBlogBySlug);
-Router.route('/:id').delete(requireAuth, requireAdmin, deleteBlog);
-Router.route('/:id/like').put(requireAuth, likeBlog);
+
+Router.route('/').get(getAllBlogs).post(requireAuth, createBlog);
+Router.route('/me').get(requireAuth, getMyBlogs);
+Router.route('/admin/review-queue').get(requireAuth, requireAdmin, getReviewQueue);
+Router.route('/slug/:slug').get(optionalAuth, getBlogBySlug);
+Router.route('/:id/review').patch(requireAuth, requireAdmin, reviewBlog);
+Router.route('/:id/like').put(optionalAuth, likeBlog);
+Router.route('/:id').put(requireAuth, updateBlog).delete(requireAuth, deleteBlog);
 
 module.exports = Router;
+
