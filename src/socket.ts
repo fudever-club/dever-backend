@@ -8,7 +8,7 @@ export const socketServer = (function () {
                 cors: {
                     origin: '*',
                     methods: ['PUT', 'GET', 'POST', 'DELETE', 'OPTIONS'],
-                    allowedHeaders: ['secretHeader'],
+                    allowedHeaders: ['secretHeader', 'Authorization'],
                     credentials: true,
                 },
             });
@@ -20,15 +20,39 @@ export const socketServer = (function () {
             return instance;
         },
         onConnection: () => {
+            if (!instance.io) return;
             instance.io.on('connection', (socket: any) => {
-                socket.on('follow', (socket: any) => {
-                    instance.io.emit('follow', 'ulatroi');
+                // User joins their private notification room
+                socket.on('join:user', (userId: string) => {
+                    if (userId) {
+                        socket.join(`user_${userId}`);
+                    }
                 });
-                socket.on('watchlist', (socket: any) => {
-                    instance.io.emit('watchlist', 'my watchlist');
-                    console.log('abcfdfs');
+
+                // Admin joins admin channel
+                socket.on('join:admin', () => {
+                    socket.join('admin_channel');
+                });
+
+                socket.on('disconnect', () => {
+                    // socket auto leaves rooms
                 });
             });
+        },
+        emitToUser: (userId: string, event: string, data: any) => {
+            if (instance.io && userId) {
+                instance.io.to(`user_${userId}`).emit(event, data);
+            }
+        },
+        emitToAdmin: (event: string, data: any) => {
+            if (instance.io) {
+                instance.io.to('admin_channel').emit(event, data);
+            }
+        },
+        emitToAll: (event: string, data: any) => {
+            if (instance.io) {
+                instance.io.emit(event, data);
+            }
         },
     };
 })();

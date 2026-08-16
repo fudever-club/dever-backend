@@ -18,6 +18,12 @@ const openSourceProjectSchema = new mongoose.Schema(
             trim: true,
             default: 'Thành viên DEVER',
         },
+        authorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+            index: true,
+        },
         stars: {
             type: Number,
             default: 0,

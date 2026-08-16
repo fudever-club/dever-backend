@@ -24,6 +24,7 @@ const uploadRoute = require('./src/routes/uploadRoute');
 const searchRoute = require('./src/routes/searchRoute');
 const openSourceRoute = require('./src/routes/openSourceRoute');
 const gamificationRoute = require('./src/routes/gamificationRoute');
+const notificationRoute = require('./src/routes/notificationRoute');
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -134,6 +135,7 @@ app.use('/api/v1/alumni', alumniRoute);
 app.use('/api/v1/opensource-projects', openSourceRoute);
 app.use('/api/v1/open-source', openSourceRoute);
 app.use('/api/v1/gamification', gamificationRoute);
+app.use('/api/v1/notifications', notificationRoute);
 app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/search', searchRoute);
 

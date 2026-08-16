@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const slugify = require('slugify');
 import { NextFunction } from 'express';
 import { generateUniqueSlug } from '../Utils/generateSlug';
 
@@ -34,6 +33,11 @@ const userSchema = mongoose.Schema(
         nickname: {
             type: String,
             default: null,
+        },
+        slug: {
+            type: String,
+            default: null,
+            index: true,
         },
         phone: {
             type: String,
@@ -204,24 +208,11 @@ userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction
 });
 
 userSchema.pre('save', async function (this: any, next: NextFunction) {
-    if (this.isModified('firstname') || this.isModified('lastname')) {
+    if ((this.isModified('firstname') || this.isModified('lastname')) && (this.firstname || this.lastname)) {
         this.slug = await generateUniqueSlug(this);
     }
     next();
 });
-
-// Generate slug from firstname and lastname before updating
-// userSchema.pre('findOneAndUpdate', async function (this: any, next: NextFunction) {
-//     const update = this.getUpdate() as any;
-//     if (update.firstname || update.lastname) {
-//         const firstname = update.firstname || this.getQuery().firstname;
-//         const lastname = update.lastname || this.getQuery().lastname;
-//         if (firstname && lastname) {
-//             update.slug = await generateUniqueSlug({ firstname, lastname });
-//         }
-//     }
-//     next();
-// });
 
 userSchema.index({ firstname: 'text', lastname: 'text', email: 'text', MSSV: 'text' });
 userSchema.index({ positionId: 1, majorId: 1, gen: 1 });

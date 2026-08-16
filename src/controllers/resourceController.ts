@@ -73,11 +73,9 @@ const SEED_RESOURCES = [
 
 export const getAllResources = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        for (const item of SEED_RESOURCES) {
-            const exists = await Resource.findOne({ title: item.title });
-            if (!exists) {
-                await Resource.create(item);
-            }
+        const count = await Resource.countDocuments();
+        if (count === 0) {
+            await Resource.insertMany(SEED_RESOURCES);
         }
         const resources = await Resource.find().select('-fileData').sort({ createdAt: -1 });
         res.status(200).json({

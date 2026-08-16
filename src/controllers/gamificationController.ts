@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { User } from '../models/UserModel';
+import { createNotification } from '../services/notificationService';
 
 export interface BadgeDefinition {
     id: string;
@@ -222,13 +223,37 @@ export const dailyCheckin = async (_req: Request, res: Response, next: NextFunct
 
         // Speed coder badge check
         let unlockedBadges = user.unlockedBadges || [];
+        let justUnlockedSpeedCoder = false;
         if (user.streakDays >= 7 && !unlockedBadges.some((b: any) => b.badgeId === 'speed_coder')) {
             unlockedBadges.push({ badgeId: 'speed_coder', unlockedAt: now });
             user.exp += 100;
             user.unlockedBadges = unlockedBadges;
+            justUnlockedSpeedCoder = true;
         }
 
         await user.save();
+
+        if (justUnlockedSpeedCoder) {
+            createNotification({
+                recipientId: user._id.toString(),
+                type: 'badge_unlocked',
+                title: 'Mở khóa Huy hiệu mới! ⚡',
+                message: 'Chúc mừng bạn đã mở khóa huy hiệu "Speed Coder" nhờ duy trì chuỗi 7 ngày điểm danh (+100 EXP)!',
+                link: '/vi/dashboard',
+                meta: { user, milestone: { badgeTitle: 'Speed Coder' } },
+                sendTelegram: true,
+            }).catch((e) => console.warn('[Gamification Notification Error]:', e));
+        } else if ([3, 7, 14, 30].includes(user.streakDays)) {
+            createNotification({
+                recipientId: user._id.toString(),
+                type: 'streak_milestone',
+                title: `Cột mốc Chuỗi điểm danh: ${user.streakDays} ngày 🔥`,
+                message: `Bạn đang duy trì ngọn lửa học tập với ${user.streakDays} ngày điểm danh liên tiếp! Tiếp tục phát huy nhé.`,
+                link: '/vi/dashboard',
+                meta: { user, milestone: { streak: user.streakDays } },
+                sendTelegram: user.streakDays >= 7,
+            }).catch((e) => console.warn('[Gamification Notification Error]:', e));
+        }
 
         const stats = calculateGamificationProfile(user.exp, user.streakDays, user.unlockedBadges);
 
@@ -248,31 +273,52 @@ export const dailyCheckin = async (_req: Request, res: Response, next: NextFunct
 
 export const getHallOfFame = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await User.find({ isExcellent: { $ne: null } })
-            .select('firstname lastname avatar exp streakDays unlockedBadges positionId departments')
+        let users = await User.find({})
+            .select('firstname lastname nickname avatar exp streakDays unlockedBadges positionId departments MSSV')
             .populate('positionId', 'name')
             .populate('departments', 'name')
             .sort({ exp: -1 })
-            .limit(10);
+            .limit(15);
 
         const leaderUsers = users.map((u: any, index: number) => {
-            const exp = u.exp || 150 + (10 - index) * 50;
+            const exp = typeof u.exp === 'number' ? u.exp : 150 + (15 - index) * 30;
             const level = Math.floor(Math.sqrt(exp / 100)) + 1;
+            const streakDays = typeof u.streakDays === 'number' ? u.streakDays : 1;
+            const unlockedBadges = u.unlockedBadges || [];
+
+            let title = 'Junior Explorer';
+            if (level >= 10) title = 'DEVER Grandmaster';
+            else if (level >= 7) title = 'System Architect';
+            else if (level >= 5) title = 'Algorithm Master';
+            else if (level >= 3) title = 'Code Pathfinder';
+
             return {
                 _id: u._id,
-                name: [u.firstname, u.lastname].filter(Boolean).join(' ') || 'Thành viên DEVER',
-                avatar: u.avatar,
+                name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.nickname || 'Thành viên DEVER',
+                avatar: u.avatar || '/images/avatar/avatar.jpg',
                 exp,
                 level,
-                streakDays: u.streakDays || Math.max(1, 10 - index),
-                badgeCount: u.unlockedBadges?.length || 2,
-                position: (u.positionId as any)?.name || 'Member',
+                title,
+                streakDays,
+                badgeCount: unlockedBadges.length,
+                unlockedBadges,
+                position: (u.positionId as any)?.name || 'Thành viên',
+                department: (u.departments?.[0] as any)?.name || 'Kỹ thuật',
             };
         });
+
+        // Top 3 for Podium
+        const podium = {
+            first: leaderUsers[0] || null,
+            second: leaderUsers[1] || null,
+            third: leaderUsers[2] || null,
+        };
 
         return res.status(200).json({
             status: 'success',
             results: leaderUsers.length,
+            podium,
+            badges: BADGES,
             data: leaderUsers,
         });
     } catch (error) {

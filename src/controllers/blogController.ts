@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Blog } from '../models/BlogModel';
 import { User } from '../models/UserModel';
+import { createNotification } from '../services/notificationService';
 
 const calculateReadTime = (content: string): string => {
     if (!content) return '1 phút đọc';
@@ -140,6 +141,20 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
         };
 
         const blog = await Blog.create(blogData);
+
+        // If submitted for review, notify Admin via In-App Notification and Telegram Bot
+        if (initialStatus === 'pending_review') {
+            createNotification({
+                recipientRole: 'admin',
+                type: 'blog_submitted',
+                title: 'Có bài viết mới gửi duyệt 📝',
+                message: `Thành viên ${authorName} vừa gửi bài viết "${blog.title}" lên hàng đợi duyệt.`,
+                link: '/vi/blog-management',
+                meta: { blog, author: { name: authorName, email: (authorUser as any)?.email } },
+                sendTelegram: true,
+            }).catch((e) => console.warn('[Blog Notification Trigger Error]:', e));
+        }
+
         res.status(201).json({
             status: 'success',
             data: blog,
@@ -240,6 +255,50 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
 
         if (!blog) {
             return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        // Handle Notifications, EXP rewards, and Telegram alerts based on status
+        if (blog.authorId) {
+            if (status === 'published') {
+                // 1. Award author +100 EXP and unlock pro_tech_author badge
+                await User.findByIdAndUpdate(blog.authorId, {
+                    $inc: { exp: 100 },
+                    $addToSet: {
+                        unlockedBadges: { badgeId: 'pro_tech_author', unlockedAt: new Date() },
+                    },
+                });
+
+                // 2. Notify author
+                createNotification({
+                    recipientId: blog.authorId.toString(),
+                    type: 'blog_approved',
+                    title: 'Bài viết của bạn đã được xuất bản! 🎉',
+                    message: `Bài viết "${blog.title}" đã được duyệt thành công (+100 EXP và Huy hiệu Tác giả).`,
+                    link: `/blog/${blog.slug}`,
+                    meta: { blog, status, reviewNotes },
+                    sendTelegram: true,
+                }).catch((e) => console.warn('[Review Notification Error]:', e));
+            } else if (status === 'changes_requested') {
+                createNotification({
+                    recipientId: blog.authorId.toString(),
+                    type: 'blog_changes_requested',
+                    title: 'Yêu cầu chỉnh sửa bài viết ⚠️',
+                    message: `Bài viết "${blog.title}" cần chỉnh sửa: ${reviewNotes || 'Vui lòng kiểm tra lại nội dung.'}`,
+                    link: '/vi/create-blog',
+                    meta: { blog, status, reviewNotes },
+                    sendTelegram: true,
+                }).catch((e) => console.warn('[Review Notification Error]:', e));
+            } else if (status === 'rejected') {
+                createNotification({
+                    recipientId: blog.authorId.toString(),
+                    type: 'blog_rejected',
+                    title: 'Bài viết không được phê duyệt ❌',
+                    message: `Bài viết "${blog.title}" đã bị từ chối: ${reviewNotes || 'Nội dung chưa phù hợp tiêu chuẩn.'}`,
+                    link: '/vi/create-blog',
+                    meta: { blog, status, reviewNotes },
+                    sendTelegram: true,
+                }).catch((e) => console.warn('[Review Notification Error]:', e));
+            }
         }
 
         res.status(200).json({
