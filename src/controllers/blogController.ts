@@ -29,11 +29,25 @@ export const getAllBlogs = async (req: Request, res: Response, next: NextFunctio
             ];
         }
 
-        const blogs = await Blog.find(filter).sort({ createdAt: -1 });
+        const blogs = await Blog.find(filter)
+            .populate('authorId', 'firstname lastname avatar')
+            .sort({ createdAt: -1 });
+
+        const mappedBlogs = blogs.map((b: any) => {
+            const blogObj = b.toObject ? b.toObject() : b;
+            if (b.authorId && typeof b.authorId === 'object') {
+                const user = b.authorId;
+                const liveName = [user.firstname, user.lastname].filter(Boolean).join(' ');
+                if (liveName) blogObj.author = { ...blogObj.author, name: liveName };
+                if (user.avatar) blogObj.author = { ...blogObj.author, avatar: user.avatar };
+            }
+            return blogObj;
+        });
+
         res.status(200).json({
             status: 'success',
-            results: blogs.length,
-            data: blogs,
+            results: mappedBlogs.length,
+            data: mappedBlogs,
         });
     } catch (error) {
         next(error);
@@ -45,31 +59,39 @@ export const getBlogBySlug = async (req: Request, res: Response, next: NextFunct
         const auth = res.locals.auth;
         const rawParam = req.params.slug;
         
-        let blog = await Blog.findOne({ slug: rawParam });
+        let blog = await Blog.findOne({ slug: rawParam }).populate('authorId', 'firstname lastname avatar');
 
         if (!blog) {
             try {
                 const decoded = decodeURIComponent(rawParam);
-                blog = await Blog.findOne({ slug: decoded });
+                blog = await Blog.findOne({ slug: decoded }).populate('authorId', 'firstname lastname avatar');
             } catch (e) {}
         }
 
         if (!blog && mongoose.Types.ObjectId.isValid(rawParam)) {
-            blog = await Blog.findById(rawParam);
+            blog = await Blog.findById(rawParam).populate('authorId', 'firstname lastname avatar');
         }
 
         if (!blog) return res.status(404).json({ status: 'error', message: 'Blog not found' });
 
         // If unpublished, only author or admin can view
         if (blog.status !== 'published') {
-            const isAuthor = auth?.userId && blog.authorId && blog.authorId.toString() === auth.userId.toString();
+            const isAuthor = auth?.userId && blog.authorId && (blog.authorId._id ? blog.authorId._id.toString() : blog.authorId.toString()) === auth.userId.toString();
             const isAdmin = Boolean(auth?.isAdmin);
             if (!isAuthor && !isAdmin) {
                 return res.status(404).json({ status: 'error', message: 'Blog not found' });
             }
         }
 
-        return res.status(200).json({ status: 'success', data: blog });
+        const blogObj = blog.toObject ? blog.toObject() : blog;
+        if (blog.authorId && typeof blog.authorId === 'object') {
+            const user = blog.authorId;
+            const liveName = [user.firstname, user.lastname].filter(Boolean).join(' ');
+            if (liveName) blogObj.author = { ...blogObj.author, name: liveName };
+            if (user.avatar) blogObj.author = { ...blogObj.author, avatar: user.avatar };
+        }
+
+        return res.status(200).json({ status: 'success', data: blogObj });
     } catch (error) { return next(error); }
 };
 
