@@ -18,9 +18,11 @@ const PUBLIC_OPTIONAL_FIELDS = [
     'leetcode',
 ] as const;
 
+const SENSITIVE_PRIVATE_FIELDS = new Set(['phone', 'email', 'MSSV', 'dob']);
+
 export const DEFAULT_PROFILE_VISIBILITY = Object.freeze(
     PUBLIC_OPTIONAL_FIELDS.reduce((visibility, field) => {
-        visibility[field] = false;
+        visibility[field] = !SENSITIVE_PRIVATE_FIELDS.has(field);
         return visibility;
     }, {} as Record<(typeof PUBLIC_OPTIONAL_FIELDS)[number], boolean>),
 );
@@ -62,6 +64,7 @@ export const toPublicUserDto = (user: any) => {
     const source = toPlainObject(user);
     const visibility = source?.profileVisibility || DEFAULT_PROFILE_VISIBILITY;
     const result: Record<string, unknown> = {
+        _id: source?._id?.toString() || null,
         profileKey: toPublicProfileKey(source),
         firstname: source?.firstname || null,
         lastname: source?.lastname || null,
@@ -73,11 +76,16 @@ export const toPublicUserDto = (user: any) => {
         majorId: referenceDto(source?.majorId),
         gen: source?.gen || null,
         isExcellent: Boolean(source?.isExcellent),
+        exp: typeof source?.exp === 'number' ? source.exp : 150,
+        streakDays: typeof source?.streakDays === 'number' ? source.streakDays : 1,
+        unlockedBadges: Array.isArray(source?.unlockedBadges) ? source.unlockedBadges : [],
         favoriteTrack: source?.favoriteTrack || null,
     };
 
     for (const field of PUBLIC_OPTIONAL_FIELDS) {
-        if (field !== 'leetcode' && visibility[field] === true) {
+        const isSensitive = SENSITIVE_PRIVATE_FIELDS.has(field);
+        const isAllowed = isSensitive ? visibility[field] === true : visibility[field] !== false;
+        if (field !== 'leetcode' && isAllowed) {
             result[field] = field === 'socials' && Array.isArray(source?.socials)
                 ? source.socials.map(socialDto).filter(Boolean)
                 : source?.[field] ?? null;

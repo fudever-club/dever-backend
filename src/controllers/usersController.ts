@@ -189,23 +189,10 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const identifier = req.params.userId;
-        const canUseInternalIdentifier = isAdmin(res) || res.locals.auth?.userId === identifier;
-        let user = await User.findOne({ nickname: identifier })
-            .populate('majorId')
-            .populate('positionId')
-            .populate('departments')
-            .populate('socials.socialId');
+        let user: any = null;
 
-        // A private nickname is not a public profile locator. New public cards
-        // use profileKey instead, so users do not need to opt in to nicknames.
-        if (user && !canSeePrivateUser(res, user) && user.profileVisibility?.nickname !== true) {
-            user = null;
-        }
-
-        if (!user && identifier.startsWith('p_')) {
-            // Existing documents do not require a migration. The collection is
-            // small today; replace this with an indexed random publicProfileId
-            // if the club grows beyond this transitional approach.
+        // 1. Try finding by profileKey (HMAC deterministic locator)
+        if (identifier.startsWith('p_')) {
             const candidates = await User.find({}).select('_id');
             const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === identifier);
             if (match) {
@@ -217,13 +204,26 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
             }
         }
 
-        if (!user && canUseInternalIdentifier && mongoose.Types.ObjectId.isValid(identifier)) {
+        // 2. Try finding by slug or nickname
+        if (!user) {
+            user = await User.findOne({
+                $or: [{ slug: identifier }, { nickname: identifier }],
+            })
+                .populate('majorId')
+                .populate('positionId')
+                .populate('departments')
+                .populate('socials.socialId');
+        }
+
+        // 3. Try finding by MongoDB ObjectId
+        if (!user && mongoose.Types.ObjectId.isValid(identifier)) {
             user = await User.findById(identifier)
                 .populate('majorId')
                 .populate('positionId')
                 .populate('departments')
                 .populate('socials.socialId');
         }
+
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
         }
