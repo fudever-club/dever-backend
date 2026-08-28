@@ -22,6 +22,7 @@ const SELF_EDITABLE_FIELDS = new Set([
     'socials',
     'skills',
     'favourites',
+    'favoriteTrack',
 ]);
 
 const VISIBILITY_FIELDS = Object.keys(DEFAULT_PROFILE_VISIBILITY);

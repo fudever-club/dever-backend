@@ -73,6 +73,7 @@ export const toPublicUserDto = (user: any) => {
         majorId: referenceDto(source?.majorId),
         gen: source?.gen || null,
         isExcellent: Boolean(source?.isExcellent),
+        favoriteTrack: source?.favoriteTrack || null,
     };
 
     for (const field of PUBLIC_OPTIONAL_FIELDS) {

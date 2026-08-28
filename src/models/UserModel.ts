@@ -164,6 +164,11 @@ const userSchema = mongoose.Schema(
                 unlockedAt: { type: Date, default: Date.now },
             },
         ],
+        favoriteTrack: {
+            title: { type: String, default: null, trim: true },
+            artist: { type: String, default: null, trim: true },
+            url: { type: String, default: null, trim: true },
+        },
     },
     { timestamps: true },
 );

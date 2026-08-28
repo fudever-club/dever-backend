@@ -41,6 +41,43 @@ export const uploadDocumentMiddleware = multer({
   },
 }).single('file');
 
+export const uploadAudioMiddleware = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
+  fileFilter: (_req, file, cb) => {
+    const isAudio =
+      file.mimetype.startsWith('audio/') ||
+      file.originalname.match(/\.(mp3|wav|ogg|m4a|aac|flac|webm|opus)$/i);
+    if (isAudio) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận file định dạng âm thanh (MP3, M4A, WAV, OGG, AAC, FLAC)!'));
+    }
+  },
+}).single('file');
+
+export const uploadAudio = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Không tìm thấy file âm thanh trong request!',
+      });
+    }
+
+    const folder = req.body.folder || 'audio';
+    const result = await uploadToStorage(req.file, folder);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Tải lên file âm thanh thành công',
+      data: result,
+    });
+  } catch (error: any) {
+    next(error);
+  }
+};
+
 export const uploadImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.file) {
