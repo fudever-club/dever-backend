@@ -49,6 +49,8 @@ const defaultAllowedOrigins = [
     'http://localhost:3003',
     'http://127.0.0.1:3003',
     'https://fu-dever-landingpage-v2.vercel.app',
+    'https://dever-client-sigma.vercel.app',
+    'https://dever-admin-three.vercel.app',
     'https://dever-client-taupe.vercel.app',
     'https://dever-admin-lac.vercel.app',
     'https://dashboard.fu-dever.com',

@@ -48,7 +48,7 @@ export const notifyAdminNewBlogSubmission = async (blog: any, author: any) => {
     const authorEmail = author?.email ? ` (${author.email})` : '';
     const category = blog.category || 'Tech Blog';
     const tags = Array.isArray(blog.tags) && blog.tags.length > 0 ? blog.tags.map((t: string) => `#${t}`).join(' ') : '#DEVER_Blog';
-    const reviewUrl = 'https://dever-admin-lac.vercel.app/vi/blog-management';
+    const reviewUrl = 'https://dever-admin-three.vercel.app/vi/blog-management';
 
     const message = `
 📝 <b>[FU-DEVER TECH BLOG] CÓ BÀI VIẾT MỚI GỬI DUYỆT!</b>
@@ -75,7 +75,7 @@ export const notifyBlogReviewResult = async (blog: any, status: string, reviewNo
     const statusText = isApproved ? '✅ ĐÃ ĐƯỢC XUẤT BẢN' : isRejected ? '❌ BỊ TỪ CHỐI' : '⚠️ YÊU CẦU CHỈNH SỬA';
     const blogUrl = isApproved
         ? `https://fu-dever-landingpage-v2.vercel.app/blog/${blog.slug}`
-        : 'https://dever-client-taupe.vercel.app/vi/create-blog';
+        : 'https://dever-client-sigma.vercel.app/vi/create-blog';
 
     const message = `
 🔔 <b>[FU-DEVER TECH BLOG] KẾT QUẢ DUYỆT BÀI VIẾT</b>
@@ -112,7 +112,7 @@ export const notifyGamificationMilestone = async (user: any, milestoneInfo: { ba
 ${detail}
 📅 <b>Thời gian:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
 
-👉 <a href="https://dever-client-taupe.vercel.app/vi/dashboard"><b>XEM BẢNG VINH DANH TRÊN DEVER CLIENT</b></a>
+👉 <a href="https://dever-client-sigma.vercel.app/vi/dashboard"><b>XEM BẢNG VINH DANH TRÊN DEVER CLIENT</b></a>
 `.trim();
 
     return await sendTelegramMessage(TELEGRAM_ADMIN_CHAT_ID, message);

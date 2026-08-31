@@ -135,7 +135,7 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
 📂 <b>GitHub:</b> ${githubUrl}
 🏷️ <b>Chuyên mục:</b> ${category || 'Open Source'}
 
-👉 <a href="https://dever-admin-lac.vercel.app/vi/content-management"><b>XEM VÀ DUYỆT DỰ ÁN TRÊN ADMIN DASHBOARD</b></a>
+👉 <a href="https://dever-admin-three.vercel.app/vi/content-management"><b>XEM VÀ DUYỆT DỰ ÁN TRÊN ADMIN DASHBOARD</b></a>
 `.trim();
         sendTelegramMessage(undefined, telegramMsg).catch(() => {});
 
