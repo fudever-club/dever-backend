@@ -48,7 +48,11 @@ export const notifyAdminNewBlogSubmission = async (blog: any, author: any) => {
     const authorEmail = author?.email ? ` (${author.email})` : '';
     const category = blog.category || 'Tech Blog';
     const tags = Array.isArray(blog.tags) && blog.tags.length > 0 ? blog.tags.map((t: string) => `#${t}`).join(' ') : '#DEVER_Blog';
-    const reviewUrl = 'https://dever-admin-three.vercel.app/vi/blog-management';
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.fudever.com';
+    const landingUrl = process.env.LANDING_URL || 'https://fudever.com';
+    const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
+
+    const reviewUrl = `${adminUrl}/vi/blog-management`;
 
     const message = `
 📝 <b>[FU-DEVER TECH BLOG] CÓ BÀI VIẾT MỚI GỬI DUYỆT!</b>
@@ -73,9 +77,11 @@ export const notifyBlogReviewResult = async (blog: any, status: string, reviewNo
     const isApproved = status === 'published';
     const isRejected = status === 'rejected';
     const statusText = isApproved ? '✅ ĐÃ ĐƯỢC XUẤT BẢN' : isRejected ? '❌ BỊ TỪ CHỐI' : '⚠️ YÊU CẦU CHỈNH SỬA';
+    const landingUrl = process.env.LANDING_URL || 'https://fudever.com';
+    const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
     const blogUrl = isApproved
-        ? `https://fu-dever-landingpage-v2.vercel.app/blog/${blog.slug}`
-        : 'https://dever-client-sigma.vercel.app/vi/create-blog';
+        ? `${landingUrl}/blog/${blog.slug}`
+        : `${clientUrl}/vi/create-blog`;
 
     const message = `
 🔔 <b>[FU-DEVER TECH BLOG] KẾT QUẢ DUYỆT BÀI VIẾT</b>
@@ -95,6 +101,7 @@ ${isApproved ? `🎁 <b>Phần thưởng:</b> +100 EXP & Mở khóa Huy hiệu T
  */
 export const notifyGamificationMilestone = async (user: any, milestoneInfo: { badgeTitle?: string; level?: number; streak?: number }) => {
     const userName = [user?.firstname, user?.lastname].filter(Boolean).join(' ') || user?.nickname || 'Thành viên DEVER';
+    const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
 
     let detail = '';
     if (milestoneInfo.badgeTitle) {
@@ -112,7 +119,7 @@ export const notifyGamificationMilestone = async (user: any, milestoneInfo: { ba
 ${detail}
 📅 <b>Thời gian:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
 
-👉 <a href="https://dever-client-sigma.vercel.app/vi/dashboard"><b>XEM BẢNG VINH DANH TRÊN DEVER CLIENT</b></a>
+👉 <a href="${clientUrl}/vi/dashboard"><b>XEM BẢNG VINH DANH TRÊN DEVER CLIENT</b></a>
 `.trim();
 
     return await sendTelegramMessage(TELEGRAM_ADMIN_CHAT_ID, message);

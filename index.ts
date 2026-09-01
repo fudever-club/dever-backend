@@ -48,6 +48,14 @@ const defaultAllowedOrigins = [
     'http://127.0.0.1:3002',
     'http://localhost:3003',
     'http://127.0.0.1:3003',
+    'https://fudever.com',
+    'https://www.fudever.com',
+    'https://client.fudever.com',
+    'https://admin.fudever.com',
+    'http://fudever.com',
+    'http://www.fudever.com',
+    'http://client.fudever.com',
+    'http://admin.fudever.com',
     'https://fu-dever-landingpage-v2.vercel.app',
     'https://dever-client-sigma.vercel.app',
     'https://dever-admin-three.vercel.app',
@@ -73,8 +81,10 @@ app.use(
             if (!origin || allowedOrigins.includes(origin)) {
                 return callback(null, true);
             }
-            // Allow dynamic Vercel / Railway / Cloudflare preview domains
+            // Allow dynamic Vercel / Railway / Cloudflare / fudever custom domains
             if (
+                /\.fudever\.com$/.test(origin) ||
+                /^https?:\/\/fudever\.com$/.test(origin) ||
                 /\.vercel\.app$/.test(origin) ||
                 /\.fu-dever\.com$/.test(origin) ||
                 /\.up\.railway\.app$/.test(origin) ||
