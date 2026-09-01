@@ -25,12 +25,13 @@ export const getActiveCampaign = async (_req: Request, res: Response, next: Next
                 semester: 'Fall 2026',
                 status: 'active',
                 bankInfo: {
-                    bankName: 'MBBank (Ngân hàng Quân Đội)',
-                    bankCode: 'MB',
-                    accountNumber: '0912345678',
-                    accountHolder: 'CLB LAP TRINH FU DEVER',
+                    bankName: 'TPBank (Ngân hàng Tiên Phong)',
+                    bankCode: 'TPB',
+                    accountNumber: '81836101820',
+                    accountHolder: 'NGUYEN THI NGOC ANH',
                     transferSyntaxTemplate: 'DEVER [MSSV] [HoTen]',
-                    qrTemplateUrl: 'https://img.vietqr.io/image/MB-0912345678-compact2.png',
+                    qrTemplateUrl: 'https://img.vietqr.io/image/TPB-81836101820-compact2.png?amount=100000&addInfo=DEVER%20MSSV%20HoTen&accountName=NGUYEN%20THI%20NGOC%20ANH',
+                    customQrUrl: '/images/treasurer-qr.png',
                 },
                 targetTotalAmount: 5000000,
             });

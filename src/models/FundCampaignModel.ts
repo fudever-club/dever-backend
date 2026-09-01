@@ -38,6 +38,7 @@ const fundCampaignSchema = new Schema<IFundCampaign>(
             accountHolder: { type: String, default: 'CLB LAP TRINH FU DEVER' },
             transferSyntaxTemplate: { type: String, default: 'DEVER [MSSV] [HoTen]' },
             qrTemplateUrl: { type: String, default: '' },
+            customQrUrl: { type: String, default: '' },
         },
         targetTotalAmount: { type: Number, default: 5000000 },
         createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
