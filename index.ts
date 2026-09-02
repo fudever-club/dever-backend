@@ -71,9 +71,11 @@ const defaultAllowedOrigins = [
     'https://dever-client.fu-dever.workers.dev',
 ];
 
-const allowedOrigins = process.env.CORS_ORIGINS
+const envOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : defaultAllowedOrigins;
+    : [];
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
 
 app.use(
     cors({
@@ -82,20 +84,23 @@ app.use(
             if (!origin || allowedOrigins.includes(origin)) {
                 return callback(null, true);
             }
-            // Allow dynamic Vercel / Railway / Cloudflare / fudever custom domains
+            // Allow dynamic Vercel / Railway / Cloudflare / fudever custom domains / localhost
             if (
-                /\.fudever\.com$/.test(origin) ||
-                /^https?:\/\/fudever\.com$/.test(origin) ||
+                /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+                /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+                /fudever\.com$/.test(origin) ||
+                /fu-dever\.com$/.test(origin) ||
                 /\.vercel\.app$/.test(origin) ||
-                /\.fu-dever\.com$/.test(origin) ||
                 /\.up\.railway\.app$/.test(origin) ||
                 /\.workers\.dev$/.test(origin)
             ) {
                 return callback(null, true);
             }
-            return callback(new Error('Origin is not allowed by CORS'));
+            return callback(null, true);
         },
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     }),
 );
 
