@@ -231,16 +231,15 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
         const leaderboard = await Leaderboard.findOne({ userId: user._id }).select('leetcodeUsername acSubmissionList');
         const privateAccess = canSeePrivateUser(res, user);
         const userData = privateAccess ? toPrivateUserDto(user) : toPublicUserDto(user);
-        const canExposeLeetcode = privateAccess || user.profileVisibility?.leetcode === true;
+        const canExposeLeetcode = privateAccess || user.profileVisibility?.leetcode !== false;
         const submissions = canExposeLeetcode
-            ? leaderboard?.acSubmissionList
-            : leaderboard?.acSubmissionList?.map((submission: any) => {
-                  const { _id, ...safeSubmission } = submission.toObject ? submission.toObject() : submission;
-                  return safeSubmission;
-              });
-        const leaderboardData = canExposeLeetcode
-            ? { leetcodeUsername: leaderboard?.leetcodeUsername, acSubmissionList: submissions }
-            : {};
+            ? (leaderboard?.acSubmissionList || [])
+            : [];
+        const leetcodeUsername = leaderboard?.leetcodeUsername || (user as any).leetcodeUsername || null;
+        const leaderboardData = {
+            leetcodeUsername,
+            acSubmissionList: submissions,
+        };
         return res.status(200).json({
             status: 'success',
             data: { ...userData, ...leaderboardData },

@@ -2,21 +2,56 @@ import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
 import _ from 'lodash';
 import { Leaderboard } from '../models/LeaderboardModel';
+import { User } from '../models/UserModel';
 import { toPublicProfileKey } from '../Utils/userDto';
+import { getJwtSecret } from '../config/auth';
 const axios = require('axios');
+
+export const getUserAcProblems = async (username: string) => {
+    try {
+        const data = JSON.stringify({
+            query: `query recentAcSubmissions($username: String!, $limit: Int!) { recentAcSubmissionList(username: $username, limit: $limit) { id title titleSlug timestamp } }`,
+            variables: { username, limit: 20 },
+        });
+        const config = {
+            method: 'post',
+            maxBodyLength: Infinity,
+            url: 'https://leetcode.com/graphql/',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            data,
+        };
+
+        const response = await axios.request(config);
+
+        const formatData =
+            response?.data?.data?.recentAcSubmissionList?.map((item: any) => {
+                return {
+                    ...item,
+                    date: new Date(Number(item.timestamp) * 1000).toISOString(),
+                };
+            }) || [];
+
+        return formatData;
+    } catch (error) {
+        console.error('Leetcode GraphQL query failed:', error);
+        return [];
+    }
+};
 
 export const getLeaderBoard = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await Leaderboard.find({})?.populate({
+        const users = await Leaderboard.find({}).populate({
             path: 'userId',
             select: 'id firstname lastname avatar',
         });
 
-        users.sort((a: any, b: any) => b.acSubmissionList.length - a.acSubmissionList.length);
+        users.sort((a: any, b: any) => (b.acSubmissionList?.length || 0) - (a.acSubmissionList?.length || 0));
 
         const leaderboard = users.map((entry: any) => ({
             leetcodeUsername: entry.leetcodeUsername,
-            acSubmissionList: entry.acSubmissionList,
+            acSubmissionList: entry.acSubmissionList || [],
             user: entry.userId
                 ? {
                       firstname: entry.userId.firstname || null,
@@ -40,70 +75,67 @@ export const subcribeLeetcode = async (req: Request, res: Response, next: NextFu
     try {
         const Authorization = req.header('authorization');
         if (!Authorization) {
-            return res.status(400).json({
+            return res.status(401).json({
                 error: {
-                    statusCode: 400,
+                    statusCode: 401,
                     status: 'error',
-                    message: 'Token is invalid',
+                    message: 'Token is required',
                 },
             });
         }
         const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
+        const { userId } = jwt.verify(token, getJwtSecret());
 
         const { leetcodeUsername } = req.body;
+        const cleanUsername = typeof leetcodeUsername === 'string' ? leetcodeUsername.trim() : '';
 
-        let user = await Leaderboard.findOne({ userId });
-
-        if (user) {
-            user.leetcodeUsername = leetcodeUsername;
-            user.acSubmissionList = [];
-            await user.save(); // Lưu lại thông tin cập nhật
-        } else {
-            // Nếu user không tồn tại, tạo mới user
-            user = await Leaderboard.create({
-                userId,
-                leetcodeUsername,
+        if (!cleanUsername) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Vui lòng nhập LeetCode username hợp lệ',
             });
         }
 
+        // Fetch recent problems immediately from LeetCode
+        let acSubmissions: any[] = [];
+        try {
+            const fetched = await getUserAcProblems(cleanUsername);
+            if (Array.isArray(fetched)) {
+                acSubmissions = fetched;
+            }
+        } catch (e) {
+            console.error('LeetCode sync error:', e);
+        }
+
+        let entry = await Leaderboard.findOne({ userId });
+
+        if (entry) {
+            entry.leetcodeUsername = cleanUsername;
+            if (acSubmissions.length > 0) {
+                entry.acSubmissionList = acSubmissions;
+            }
+            await entry.save();
+        } else {
+            entry = await Leaderboard.create({
+                userId,
+                leetcodeUsername: cleanUsername,
+                acSubmissionList: acSubmissions,
+            });
+        }
+
+        // Also update User document
+        await User.findByIdAndUpdate(userId, { leetcodeUsername: cleanUsername });
+
         res.status(200).json({
             status: 'success',
-            data: user,
+            data: {
+                userId,
+                leetcodeUsername: cleanUsername,
+                acSubmissionList: entry.acSubmissionList || [],
+            },
         });
     } catch (error) {
         next(error);
-    }
-};
-
-export const getUserAcProblems = async (username: string) => {
-    try {
-        let data = JSON.stringify({
-            query: `query recentAcSubmissions($username: String!, $limit: Int!) { recentAcSubmissionList(username: $username, limit: $limit) { id title titleSlug timestamp } }`,
-            variables: { username: username, limit: 20 },
-        });
-        let config = {
-            method: 'get',
-            maxBodyLength: Infinity,
-            url: 'https://leetcode.com/graphql/',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            data: data,
-        };
-
-        const response = await axios.request(config);
-
-        const formatData = response?.data?.data?.recentAcSubmissionList.map((item: any) => {
-            return {
-                ...item,
-                date: new Date(item.timestamp * 1000).toLocaleString(),
-            };
-        });
-
-        return formatData;
-    } catch (error) {
-        return error;
     }
 };
 
@@ -112,17 +144,16 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
         const users = await Leaderboard.find({});
 
         const updatePromises = users.map(async (user: any) => {
-            const { leetcodeUsername, acSubmissionList } = user;
+            const { leetcodeUsername, acSubmissionList = [] } = user;
+            if (!leetcodeUsername) return null;
 
             const data = await getUserAcProblems(leetcodeUsername);
 
             const specificDate = new Date('2024-05-01');
             const specificDateTimestamp = specificDate.getTime() / 1000;
 
-            const userCreationTimestamp = new Date(user?.createdAt).getTime() / 1000;
-
             const filteredData = data.filter(
-                (submission: any) => parseInt(submission.timestamp) > specificDateTimestamp,
+                (submission: any) => parseInt(submission.timestamp, 10) > specificDateTimestamp,
             );
 
             const existingSubmissions = new Map(acSubmissionList.map((submission: any) => [submission.id, submission]));
@@ -133,11 +164,6 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
             });
 
             const mergedSubmissionList = Array.from(existingSubmissions.values());
-
-            const query = { leetcodeUsername };
-
-            console.log('🚀 ~ updatePromises ~ leetcodeUsername:', leetcodeUsername);
-            console.log('🚀 ~ updatePromises ~ mergedSubmissionList:', mergedSubmissionList);
 
             const uniqueSubmissions: any = [];
             const seenSlugs = new Set();
@@ -153,15 +179,16 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
                 $set: { acSubmissionList: uniqueSubmissions },
             };
 
-            await Leaderboard.updateOne(query, updateDocument);
+            await Leaderboard.updateOne({ leetcodeUsername }, updateDocument);
 
             return { leetcodeUsername, status: 'success', data: updateDocument };
         });
 
-        await Promise.all(updatePromises);
+        await Promise.all(updatePromises.filter(Boolean));
 
         res.status(200).json({
-            status: 'update complete',
+            status: 'success',
+            message: 'Cập nhật bảng xếp hạng LeetCode thành công',
         });
     } catch (error) {
         next(error);
