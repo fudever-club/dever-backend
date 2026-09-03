@@ -87,7 +87,7 @@ export interface FileDownloadStream {
 }
 
 export const uploadToStorage = async (
-  file: Express.Multer.File,
+  file: any,
   folder: string = 'media'
 ): Promise<UploadResult> => {
   const config = getStorageConfig();

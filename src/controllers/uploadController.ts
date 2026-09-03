@@ -7,7 +7,7 @@ const storage = multer.memoryStorage();
 export const uploadImageMiddleware = multer({
   storage,
   limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: any, cb: any) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
@@ -19,7 +19,7 @@ export const uploadImageMiddleware = multer({
 export const uploadDocumentMiddleware = multer({
   storage,
   limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB max
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: any, cb: any) => {
     const allowed = [
       'application/pdf',
       'application/zip',
@@ -44,7 +44,7 @@ export const uploadDocumentMiddleware = multer({
 export const uploadAudioMiddleware = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: any, cb: any) => {
     const isAudio =
       file.mimetype.startsWith('audio/') ||
       file.originalname.match(/\.(mp3|wav|ogg|m4a|aac|flac|webm|opus)$/i);
@@ -58,7 +58,8 @@ export const uploadAudioMiddleware = multer({
 
 export const uploadAudio = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.file) {
+    const file = (req as any).file;
+    if (!file) {
       return res.status(400).json({
         status: 'error',
         message: 'Không tìm thấy file âm thanh trong request!',
@@ -66,7 +67,7 @@ export const uploadAudio = async (req: Request, res: Response, next: NextFunctio
     }
 
     const folder = req.body.folder || 'audio';
-    const result = await uploadToStorage(req.file, folder);
+    const result = await uploadToStorage(file, folder);
 
     res.status(200).json({
       status: 'success',
@@ -80,7 +81,8 @@ export const uploadAudio = async (req: Request, res: Response, next: NextFunctio
 
 export const uploadImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.file) {
+    const file = (req as any).file;
+    if (!file) {
       return res.status(400).json({
         status: 'error',
         message: 'Không tìm thấy file hình ảnh trong request!',
@@ -88,7 +90,7 @@ export const uploadImage = async (req: Request, res: Response, next: NextFunctio
     }
 
     const folder = req.body.folder || 'blog-images';
-    const result = await uploadToStorage(req.file, folder);
+    const result = await uploadToStorage(file, folder);
 
     res.status(200).json({
       status: 'success',
@@ -102,7 +104,8 @@ export const uploadImage = async (req: Request, res: Response, next: NextFunctio
 
 export const uploadDocument = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.file) {
+    const file = (req as any).file;
+    if (!file) {
       return res.status(400).json({
         status: 'error',
         message: 'Không tìm thấy file tài liệu trong request!',
@@ -110,7 +113,7 @@ export const uploadDocument = async (req: Request, res: Response, next: NextFunc
     }
 
     const folder = req.body.folder || 'resources';
-    const result = await uploadToStorage(req.file, folder);
+    const result = await uploadToStorage(file, folder);
 
     res.status(200).json({
       status: 'success',
