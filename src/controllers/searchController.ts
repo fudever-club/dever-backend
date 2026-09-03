@@ -39,9 +39,9 @@ export const globalSearch = async (req: Request, res: Response, next: NextFuncti
         .lean(),
 
       Event.find({
-        $or: [{ name: regex }, { description: regex }, { location: regex }],
+        $or: [{ title: regex }, { description: regex }, { location: regex }, { speakers: regex }],
       })
-        .select('name description location time')
+        .select('title description location date time speakers coverImage')
         .limit(6)
         .lean(),
 
@@ -90,10 +90,10 @@ export const globalSearch = async (req: Request, res: Response, next: NextFuncti
     events.forEach((e: any) => {
       results.push({
         id: `event_${e._id}`,
-        title: e.name,
+        title: e.title || 'Sự kiện & Workshop',
         category: 'Event',
         url: '/events',
-        subtitle: `${e.time ? new Date(e.time).toLocaleDateString('vi-VN') : 'Sự kiện'} • ${e.location || 'FPT University Đà Nẵng'}`,
+        subtitle: `${e.date ? `${e.date} (${e.time || '14:00 - 17:00'})` : 'Sự kiện CLB'} • ${e.location || 'FPT University Đà Nẵng'}`,
       });
     });
 

@@ -34,10 +34,21 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
 
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        if (req.body.isFeatured) {
+        const payload = { ...req.body };
+        if (!payload.coverImage || payload.coverImage.trim() === '') {
+            payload.coverImage = '/images/dever_blog_hero.png';
+        }
+        if (!payload.registerUrl || payload.registerUrl.trim() === '') {
+            payload.registerUrl = '#';
+        }
+        if (!payload.checkinUrl || payload.checkinUrl.trim() === '') {
+            payload.checkinUrl = '#';
+        }
+
+        if (payload.isFeatured) {
             await Event.updateMany({}, { isFeatured: false });
         }
-        const event = await Event.create(req.body);
+        const event = await Event.create(payload);
         res.status(201).json({
             status: 'success',
             data: event,
@@ -49,10 +60,18 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        if (req.body.isFeatured) {
+        const payload = { ...req.body };
+        if (payload.registerUrl !== undefined && (!payload.registerUrl || payload.registerUrl.trim() === '')) {
+            payload.registerUrl = '#';
+        }
+        if (payload.checkinUrl !== undefined && (!payload.checkinUrl || payload.checkinUrl.trim() === '')) {
+            payload.checkinUrl = '#';
+        }
+
+        if (payload.isFeatured) {
             await Event.updateMany({ _id: { $ne: req.params.id } }, { isFeatured: false });
         }
-        const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
+        const event = await Event.findByIdAndUpdate(req.params.id, payload, {
             new: true,
             runValidators: true,
         });

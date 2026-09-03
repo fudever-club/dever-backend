@@ -8,6 +8,14 @@ const safeUrlValidator = {
     message: (props: { value: string }) => `${props.value} không phải là đường dẫn URL an toàn (phải bắt đầu bằng http:// hoặc https://)`,
 };
 
+const safeImageUrlValidator = {
+    validator: function (v: string) {
+        if (!v || v === '#' || v.trim() === '') return true;
+        return /^(https?:\/\/|\/|data:image\/)/i.test(v.trim());
+    },
+    message: (props: { value: string }) => `${props.value} không phải là đường dẫn ảnh hợp lệ (phải bắt đầu bằng http://, https://, / hoặc data:image/)`,
+};
+
 const eventSchema = mongoose.Schema(
     {
         title: {
@@ -42,8 +50,8 @@ const eventSchema = mongoose.Schema(
         },
         coverImage: {
             type: String,
-            default: '',
-            validate: safeUrlValidator,
+            default: '/images/dever_blog_hero.png',
+            validate: safeImageUrlValidator,
         },
         description: {
             type: String,
@@ -52,12 +60,12 @@ const eventSchema = mongoose.Schema(
         },
         registerUrl: {
             type: String,
-            required: [true, 'Register Google Form URL is required'],
+            default: '#',
             validate: safeUrlValidator,
         },
         checkinUrl: {
             type: String,
-            required: [true, 'Checkin Google Form URL is required'],
+            default: '#',
             validate: safeUrlValidator,
         },
         isFeatured: {
