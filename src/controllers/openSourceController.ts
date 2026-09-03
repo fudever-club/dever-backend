@@ -39,11 +39,6 @@ const INITIAL_PROJECTS = [
 
 export const listOpenSourceProjects = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        let count = await OpenSourceProject.countDocuments();
-        if (count === 0) {
-            await OpenSourceProject.insertMany(INITIAL_PROJECTS);
-        }
-
         const projects = await OpenSourceProject.find({ isPublished: true }).sort({ stars: -1, createdAt: -1 });
         return res.status(200).json({ status: 'success', results: projects.length, data: projects });
     } catch (error) {
@@ -53,11 +48,6 @@ export const listOpenSourceProjects = async (_req: Request, res: Response, next:
 
 export const listAllOpenSourceProjectsForAdmin = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        let count = await OpenSourceProject.countDocuments();
-        if (count === 0) {
-            await OpenSourceProject.insertMany(INITIAL_PROJECTS);
-        }
-
         const projects = await OpenSourceProject.find().sort({ createdAt: -1 });
         return res.status(200).json({ status: 'success', results: projects.length, data: projects });
     } catch (error) {
