@@ -57,6 +57,10 @@ const blogSchema = mongoose.Schema(
             enum: ['published', 'draft', 'pending_review', 'changes_requested', 'rejected'],
             default: 'draft',
         },
+        isFeatured: {
+            type: Boolean,
+            default: false,
+        },
         reviewNotes: {
             type: String,
             default: '',
@@ -71,6 +75,9 @@ const blogSchema = mongoose.Schema(
     },
     { timestamps: true },
 );
+
+blogSchema.index({ isFeatured: -1, createdAt: -1 });
+blogSchema.index({ status: 1, isFeatured: -1 });
 
 export const Blog = mongoose.model('Blog', blogSchema);
 

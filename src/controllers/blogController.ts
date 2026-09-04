@@ -13,8 +13,12 @@ const calculateReadTime = (content: string): string => {
 
 export const getAllBlogs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { category, tag, search } = req.query;
+        const { category, tag, search, featured } = req.query;
         const filter: any = { status: 'published' };
+
+        if (featured === 'true') {
+            filter.isFeatured = true;
+        }
 
         if (category && category !== 'All') {
             filter.category = category;
@@ -31,7 +35,7 @@ export const getAllBlogs = async (req: Request, res: Response, next: NextFunctio
 
         const blogs = await Blog.find(filter)
             .populate('authorId', 'firstname lastname avatar')
-            .sort({ createdAt: -1 });
+            .sort({ isFeatured: -1, createdAt: -1 });
 
         const mappedBlogs = blogs.map((b: any) => {
             const blogObj = b.toObject ? b.toObject() : b;
@@ -232,6 +236,75 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
         return res.status(200).json({
             status: 'success',
             data: updatedBlog,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const toggleFeaturedBlog = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const blog = await Blog.findById(req.params.id);
+        if (!blog) {
+            return res.status(404).json({ status: 'error', message: 'Blog not found' });
+        }
+
+        const newFeatured = !blog.isFeatured;
+        blog.isFeatured = newFeatured;
+        await blog.save();
+
+        return res.status(200).json({
+            status: 'success',
+            message: newFeatured ? 'Đã ghim bài viết lên mục nổi bật' : 'Đã bỏ ghim bài viết khỏi mục nổi bật',
+            data: blog,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getAllBlogsForAdmin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { status, category, search } = req.query;
+        const filter: any = {};
+
+        if (status && status !== 'all') {
+            if (status === 'featured') {
+                filter.isFeatured = true;
+            } else {
+                filter.status = status;
+            }
+        }
+        if (category && category !== 'All' && category !== 'Tất cả') {
+            filter.category = category;
+        }
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { excerpt: { $regex: search, $options: 'i' } },
+                { 'author.name': { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const blogs = await Blog.find(filter)
+            .populate('authorId', 'firstname lastname avatar email')
+            .sort({ isFeatured: -1, updatedAt: -1, createdAt: -1 });
+
+        const mappedBlogs = blogs.map((b: any) => {
+            const blogObj = b.toObject ? b.toObject() : b;
+            if (b.authorId && typeof b.authorId === 'object') {
+                const user = b.authorId;
+                const liveName = [user.firstname, user.lastname].filter(Boolean).join(' ');
+                if (liveName) blogObj.author = { ...blogObj.author, name: liveName };
+                if (user.avatar) blogObj.author = { ...blogObj.author, avatar: user.avatar };
+            }
+            return blogObj;
+        });
+
+        return res.status(200).json({
+            status: 'success',
+            results: mappedBlogs.length,
+            data: mappedBlogs,
         });
     } catch (error) {
         next(error);
