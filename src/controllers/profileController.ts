@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { User } from '../models/UserModel';
+import { Alumni } from '../models/AlumniModel';
 import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto } from '../Utils/userDto';
 
 const bcrypt = require('bcryptjs');
@@ -64,6 +65,14 @@ export const editProfile = async (req: Request, res: Response, next: NextFunctio
             .populate('socials.socialId');
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
+
+        // Automatically synchronize workplace and avatar to Alumni directory if member is an alumnus
+        if (update.workplace || update.avatar) {
+            const alumniSync: Record<string, unknown> = {};
+            if (update.workplace) alumniSync.workplace = update.workplace;
+            if (update.avatar) alumniSync.avatar = update.avatar;
+            await Alumni.findOneAndUpdate({ userId }, alumniSync).catch(() => {});
         }
 
         return res.status(200).json({

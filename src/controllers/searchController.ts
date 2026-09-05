@@ -14,6 +14,8 @@ export interface SearchResultItem {
   extra?: any;
 }
 
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const globalSearch = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const rawQuery = (req.query.q as string || '').trim();
@@ -25,7 +27,8 @@ export const globalSearch = async (req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const regex = new RegExp(rawQuery, 'i');
+    const safeQuery = escapeRegExp(rawQuery);
+    const regex = new RegExp(safeQuery, 'i');
     const limit = Math.min(Number(req.query.limit) || 20, 50);
 
     // Search across 5 domains in parallel

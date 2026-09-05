@@ -11,8 +11,12 @@ export interface ErrorType {
 }
 
 exports.errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+        return next(err);
+    }
+
     err.statusCode = res.statusCode = err.status || 500;
-    console.log(err);
+    console.error('[Error Handler]:', err);
 
     if (err.code === 11000) {
         err.statusCode = 400;

@@ -1,153 +1,158 @@
 import { Request, Response, NextFunction } from 'express';
-const jwt = require('jsonwebtoken');
-
 import { User } from '../models/UserModel';
-import { Position } from './../models/PositionModel';
+import { Position } from '../models/PositionModel';
+import { PRESIDENT_POSITION, VICE_PRESIDENT_POSITION } from '../middlewares/auth';
+
+const PROTECTED_POSITIONS = new Set([PRESIDENT_POSITION, VICE_PRESIDENT_POSITION, 'MEMBER']);
 
 export const createPosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { name, constant } = req.body;
+        if (!name?.trim() || !constant?.trim()) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Tên chức vụ và mã constant là bắt buộc',
+            });
+        }
 
-        await Position.create({
-            name,
-            constant,
+        const normalizedConstant = constant.trim().toUpperCase().replace(/\s+/g, '_');
+        const existing = await Position.findOne({ constant: normalizedConstant });
+        if (existing) {
+            return res.status(409).json({
+                status: 'error',
+                message: `Chức vụ với mã '${normalizedConstant}' đã tồn tại`,
+            });
+        }
+
+        const position = await Position.create({
+            name: name.trim(),
+            constant: normalizedConstant,
         });
-        res.status(200).json({
+
+        return res.status(201).json({
             status: 'success',
-            data: {
-                name,
-                constant,
-            },
+            data: position,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const getAllPositions = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const positions = await Position.find({});
+        const positions = await Position.find({}).sort({ createdAt: 1 });
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: positions,
             length: positions?.length,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const getPositionById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-
         const position = await Position.findById(id);
+        if (!position) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Chức vụ không tồn tại',
+            });
+        }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: position,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const editPosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { id } = req.params;
         const { name, constant } = req.body;
 
-        const position = await Position.findByIdAndUpdate(id, {
-            name,
-            constant,
-        });
+        const current = await Position.findById(id);
+        if (!current) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Chức vụ không tồn tại',
+            });
+        }
 
-        res.status(200).json({
+        if (PROTECTED_POSITIONS.has(current.constant) && constant && constant !== current.constant) {
+            return res.status(403).json({
+                status: 'error',
+                message: `Không thể đổi mã định danh constant của chức vụ hệ thống '${current.constant}'`,
+            });
+        }
+
+        const updateData: Record<string, string> = {};
+        if (name?.trim()) updateData.name = name.trim();
+        if (constant?.trim() && !PROTECTED_POSITIONS.has(current.constant)) {
+            const nextConstant = constant.trim().toUpperCase().replace(/\s+/g, '_');
+            if (nextConstant !== current.constant) {
+                const existing = await Position.findOne({ constant: nextConstant, _id: { $ne: id } });
+                if (existing) {
+                    return res.status(409).json({
+                        status: 'error',
+                        message: `Chức vụ với mã '${nextConstant}' đã tồn tại`,
+                    });
+                }
+                updateData.constant = nextConstant;
+            }
+        }
+
+        const position = await Position.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
+        return res.status(200).json({
             status: 'success',
             data: position,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const deletePosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { id } = req.params;
+        const position = await Position.findById(id);
+        if (!position) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Chức vụ không tồn tại',
+            });
+        }
+
+        if (PROTECTED_POSITIONS.has(position.constant)) {
+            return res.status(403).json({
+                status: 'error',
+                message: `Chức vụ hệ thống '${position.name}' (${position.constant}) được bảo vệ và không thể xóa`,
+            });
+        }
+
+        const memberCount = await User.countDocuments({ positionId: id });
+        if (memberCount > 0) {
+            return res.status(409).json({
+                status: 'error',
+                message: `Không thể xóa: Hiện có ${memberCount} thành viên đang giữ chức vụ này. Vui lòng chuyển chức vụ của thành viên trước khi xóa.`,
+            });
+        }
+
         await Position.findByIdAndDelete(id);
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
+            message: 'Đã xóa chức vụ thành công',
             data: null,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };

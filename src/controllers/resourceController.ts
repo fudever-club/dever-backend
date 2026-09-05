@@ -32,6 +32,7 @@ const SEED_RESOURCES = [
         description: 'Bộ slide đào tạo chi tiết về kiến trúc Server Components, cơ chế caching 4 tầng và kỹ thuật tối ưu Core Web Vitals.',
         fileUrl: 'https://drive.google.com/file/d/sample_nextjs14_slide/view',
         size: '14.5 MB (PDF)',
+        isFeatured: true,
     },
     {
         title: 'Mã Nguồn Mẫu: Fullstack Express + TypeScript + Clean Architecture',
@@ -41,6 +42,7 @@ const SEED_RESOURCES = [
         description: 'Boilerplate chuẩn doanh nghiệp tích hợp sẵn JWT Auth, Mongoose, Docker-compose, Swagger và thanh toán VNPAY.',
         fileUrl: 'https://github.com/fu-dever/vnpay-nodejs-template',
         size: '2.8 MB (GitHub Repo)',
+        isFeatured: true,
     },
     {
         title: 'Ebook / Cẩm Nang: 100 Thuật Toán Kinh Điển & Bí Kíp Giải CSD201',
@@ -50,6 +52,7 @@ const SEED_RESOURCES = [
         description: 'Tổng hợp các dạng bài quy hoạch động, cây nhị phân, đồ thị Dijkstra và các bẫy thường gặp trong các kỳ thi FPTU.',
         fileUrl: 'https://drive.google.com/file/d/sample_csd201_algorithms/view',
         size: '8.2 MB (PDF)',
+        isFeatured: true,
     },
     {
         title: 'Cheatsheet: Trọn Bộ Phím Tắt & Lệnh Git Thực Chiến Dành Cho Dev',
@@ -59,6 +62,7 @@ const SEED_RESOURCES = [
         description: 'Bản tóm tắt trực quan các lệnh Rebase, Cherry-pick, Stash và giải quyết Conflict trong môi trường làm việc nhóm.',
         fileUrl: 'https://drive.google.com/file/d/sample_git_cheatsheet/view',
         size: '1.5 MB (PDF Infographic)',
+        isFeatured: false,
     },
     {
         title: 'Slide Workshop: Nhập Môn Trí Tuệ Nhân Tạo & Xây Dựng AI RAG Pipeline',
@@ -68,17 +72,24 @@ const SEED_RESOURCES = [
         description: 'Hướng dẫn thực chiến tích hợp LangChain, Vector Database và OpenAI API vào ứng dụng web thực tế.',
         fileUrl: 'https://drive.google.com/file/d/sample_ai_rag_workshop/view',
         size: '22.4 MB (PDF)',
+        isFeatured: false,
     },
 ];
 
 export const getAllResources = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const count = await Resource.countDocuments();
-        if (count === 0) {
-            await Resource.insertMany(SEED_RESOURCES);
+        const filter: Record<string, any> = {};
+        if (req.query.featured === 'true') {
+            filter.isFeatured = true;
+        } else if (req.query.featured === 'false') {
+            filter.isFeatured = false;
         }
-        const resources = await Resource.find().select('-fileData').sort({ createdAt: -1 });
-        res.status(200).json({
+        if (typeof req.query.category === 'string' && req.query.category.trim()) {
+            filter.category = new RegExp(req.query.category.trim(), 'i');
+        }
+
+        const resources = await Resource.find(filter).select('-fileData').sort({ createdAt: -1 });
+        return res.status(200).json({
             status: 'success',
             results: resources.length,
             data: resources,
@@ -120,13 +131,14 @@ export const createResource = async (req: Request, res: Response, next: NextFunc
             fileName: uploadedFile ? (typeof fileName === 'string' ? fileName.slice(0, 255) : 'download') : null,
             mimeType: uploadedFile?.mimeType || null,
             fileData: uploadedFile?.encoded || null,
+            isFeatured: Boolean(req.body?.isFeatured),
         });
 
         if (uploadedFile) {
             resource.fileUrl = `${req.protocol}://${req.get('host')}/api/v1/resources/${resource._id}/download`;
             await resource.save();
         }
-        res.status(201).json({
+        return res.status(201).json({
             status: 'success',
             data: resource.toObject({ versionKey: false }),
         });
@@ -141,6 +153,9 @@ export const downloadResource = async (req: Request, res: Response, next: NextFu
         if (!resource) {
             return res.status(404).json({ status: 'error', message: 'Tài liệu không tồn tại' });
         }
+
+        // Track download metrics
+        await Resource.findByIdAndUpdate(resource._id, { $inc: { downloadCount: 1 } }).catch(() => {});
 
         // 1. If base64 fileData exists in document
         if (resource.fileData) {
@@ -181,9 +196,57 @@ export const downloadResource = async (req: Request, res: Response, next: NextFu
 export const deleteResource = async (req: Request, res: Response, next: NextFunction) => {
     try {
         await Resource.findByIdAndDelete(req.params.id);
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             message: 'Resource deleted successfully',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const toggleResourceFeatured = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const { isFeatured } = req.body || {};
+        const resource = await Resource.findById(id);
+        if (!resource) {
+            return res.status(404).json({ status: 'error', message: 'Tài liệu không tồn tại' });
+        }
+
+        resource.isFeatured = typeof isFeatured === 'boolean' ? isFeatured : !resource.isFeatured;
+        await resource.save();
+
+        return res.status(200).json({
+            status: 'success',
+            message: resource.isFeatured
+                ? 'Đã ghim tài liệu lên mục TÀI LIỆU TIÊU ĐIỂM thành công!'
+                : 'Đã bỏ ghim tài liệu khỏi mục tiêu điểm.',
+            data: resource.toObject({ versionKey: false }),
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateResource = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const allowedUpdates = ['title', 'type', 'category', 'author', 'description', 'fileUrl', 'size', 'isFeatured'];
+        const updates: Record<string, unknown> = {};
+        for (const field of allowedUpdates) {
+            if (req.body && req.body[field] !== undefined) {
+                updates[field] = req.body[field];
+            }
+        }
+        const resource = await Resource.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+        if (!resource) {
+            return res.status(404).json({ status: 'error', message: 'Tài liệu không tồn tại' });
+        }
+        return res.status(200).json({
+            status: 'success',
+            message: 'Cập nhật tài liệu thành công',
+            data: resource.toObject({ versionKey: false }),
         });
     } catch (error) {
         next(error);

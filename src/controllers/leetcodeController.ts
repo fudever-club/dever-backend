@@ -73,18 +73,13 @@ export const getLeaderBoard = async (req: Request, res: Response, next: NextFunc
 
 export const subcribeLeetcode = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
             return res.status(401).json({
-                error: {
-                    statusCode: 401,
-                    status: 'error',
-                    message: 'Token is required',
-                },
+                status: 'error',
+                message: 'Yêu cầu đăng nhập',
             });
         }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, getJwtSecret());
 
         const { leetcodeUsername } = req.body;
         const cleanUsername = typeof leetcodeUsername === 'string' ? leetcodeUsername.trim() : '';

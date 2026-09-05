@@ -69,7 +69,7 @@ export const uploadAudio = async (req: Request, res: Response, next: NextFunctio
     const folder = req.body.folder || 'audio';
     const result = await uploadToStorage(file, folder);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Tải lên file âm thanh thành công',
       data: result,
@@ -92,7 +92,7 @@ export const uploadImage = async (req: Request, res: Response, next: NextFunctio
     const folder = req.body.folder || 'blog-images';
     const result = await uploadToStorage(file, folder);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Tải lên hình ảnh thành công',
       data: result,
@@ -115,7 +115,7 @@ export const uploadDocument = async (req: Request, res: Response, next: NextFunc
     const folder = req.body.folder || 'resources';
     const result = await uploadToStorage(file, folder);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       message: 'Tải lên tài liệu thành công',
       data: result,
@@ -143,7 +143,7 @@ export const serveFile = async (req: Request, res: Response, next: NextFunction)
       res.setHeader('Content-Length', fileObj.contentLength);
     }
 
-    fileObj.stream.pipe(res);
+    return fileObj.stream.pipe(res);
   } catch (error) {
     next(error);
   }

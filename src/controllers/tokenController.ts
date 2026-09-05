@@ -9,6 +9,9 @@ import { Position } from '../models/PositionModel';
 export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ status: 'error', message: 'Token is required' });
+        }
         const { userId } = jwt.verify(token, getJwtSecret());
 
         const user = await User.findById({ _id: userId }).populate({ path: 'positionId', model: Position });
@@ -18,7 +21,7 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         }
         const responseData = toPrivateUserDto(user);
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: responseData,
         });

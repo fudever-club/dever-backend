@@ -19,6 +19,7 @@ type ProvisioningInput = {
 };
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const makeTemporaryPassword = () => randomBytes(18).toString('base64url');
 
@@ -155,7 +156,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 
         const search = typeof req.query.search === 'string' ? req.query.search.replace(/^"|"$/g, '') : '';
         if (search) {
-            const searchRegex = new RegExp(search, 'i');
+            const searchRegex = new RegExp(escapeRegExp(search), 'i');
             filter.$or = admin
                 ? [{ firstname: searchRegex }, { lastname: searchRegex }, { email: searchRegex }, { nickname: searchRegex }]
                 : [{ firstname: searchRegex }, { lastname: searchRegex }, { nickname: searchRegex }];

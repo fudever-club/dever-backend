@@ -4,6 +4,8 @@ import { Blog } from '../models/BlogModel';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
 
+const escapeRegExp = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
 const calculateReadTime = (content: string): string => {
     if (!content) return '1 phút đọc';
     const words = content.trim().split(/\s+/).length;
@@ -26,10 +28,11 @@ export const getAllBlogs = async (req: Request, res: Response, next: NextFunctio
         if (tag) {
             filter.tags = tag;
         }
-        if (search) {
+        if (search && typeof search === 'string' && search.trim()) {
+            const safeSearch = escapeRegExp(search.trim());
             filter.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { excerpt: { $regex: search, $options: 'i' } },
+                { title: { $regex: safeSearch, $options: 'i' } },
+                { excerpt: { $regex: safeSearch, $options: 'i' } },
             ];
         }
 
@@ -278,11 +281,12 @@ export const getAllBlogsForAdmin = async (req: Request, res: Response, next: Nex
         if (category && category !== 'All' && category !== 'Tất cả') {
             filter.category = category;
         }
-        if (search) {
+        if (search && typeof search === 'string' && search.trim()) {
+            const safeSearch = escapeRegExp(search.trim());
             filter.$or = [
-                { title: { $regex: search, $options: 'i' } },
-                { excerpt: { $regex: search, $options: 'i' } },
-                { 'author.name': { $regex: search, $options: 'i' } },
+                { title: { $regex: safeSearch, $options: 'i' } },
+                { excerpt: { $regex: safeSearch, $options: 'i' } },
+                { 'author.name': { $regex: safeSearch, $options: 'i' } },
             ];
         }
 

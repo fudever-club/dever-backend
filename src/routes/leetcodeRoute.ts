@@ -7,6 +7,7 @@ const Router = express.Router();
 Router.route('/').get(getLeaderBoard);
 Router.route('/leaderboard').get(getLeaderBoard);
 Router.route('/subcribe').post(requireAuth, subcribeLeetcode);
+Router.route('/subscribe').post(requireAuth, subcribeLeetcode);
 Router.route('/update').post(requireAuth, requireAdmin, updateLeaderboard);
 
 module.exports = Router;

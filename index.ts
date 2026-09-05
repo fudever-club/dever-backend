@@ -165,22 +165,22 @@ app.use('/api/v1/search', searchRoute);
 swaggerDocs(app, Number(port));
 
 app.all('*', (req, res, next) => {
-    const err: ErrorType = new Error('Unhandled Route');
+    const err: ErrorType = new Error(`Unhandled Route: ${req.method} ${req.originalUrl}`);
     err.status = 404;
     next(err);
 });
 
-// app.use((error: any, req: any, res: any, next: any) => {
-//     error.statusCode = error.statusCode || 500; // Changed to 500 for a more appropriate default error code
-//     error.status = error.status || 'error';
+// Mount global error handler across all API routes and catch-all 404
+app.use(errorHandler);
 
-//     res.status(error.statusCode).json({
-//         status: error.status,
-//         message: error.message,
-//     });
-// });
+// Global process resilience against unhandled promises and exceptions
+process.on('unhandledRejection', (reason: any) => {
+    console.error('[Process] Unhandled Rejection:', reason);
+});
 
-app.use('/api/v1/', errorHandler);
+process.on('uncaughtException', (error: Error) => {
+    console.error('[Process] Uncaught Exception:', error);
+});
 
 import { socketServer } from './src/socket';
 socketServer.init(server);

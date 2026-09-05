@@ -1,74 +1,56 @@
 import { Request, Response, NextFunction } from 'express';
-const jwt = require('jsonwebtoken');
-
-import { User } from '../models/UserModel';
-import { Department } from '../models/DepartmentModel';
 import { Album } from '../models/albumModel';
 
 export const createAlbum = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { name, description } = req.body;
+        if (!name?.trim()) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Tên album là bắt buộc',
+            });
+        }
 
         const album = await Album.create({
-            name,
-            description,
+            name: name.trim(),
+            description: description?.trim() || '',
         });
-        res.status(200).json({
+
+        return res.status(201).json({
             status: 'success',
             data: album,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
-export const getAllAlbums = async (req: Request, res: Response, next: NextFunction) => {
+export const getAllAlbums = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        const albums = await Album.find({});
+        const albums = await Album.find({}).sort({ createdAt: -1 });
 
         const limitedAlbums = albums.map((album: any) => {
             const albumObject = album.toObject();
-            albumObject.imageList = albumObject.imageList.slice(0, 5);
+            albumObject.imageList = (albumObject.imageList || []).slice(0, 5);
             return albumObject;
         });
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
+            results: limitedAlbums.length,
             data: limitedAlbums,
             length: limitedAlbums.length,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const getAlbumBySlug = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { slug } = req.params;
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
+        const page = Math.max(1, parseInt(req.query.page as string) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
         const skip = (page - 1) * limit;
 
         const album = await Album.findOne({ slug });
@@ -76,14 +58,14 @@ export const getAlbumBySlug = async (req: Request, res: Response, next: NextFunc
         if (!album) {
             return res.status(404).json({
                 status: 'fail',
-                message: 'Album not found',
+                message: 'Album không tồn tại',
             });
         }
 
-        const totalImages = album.imageList.length;
+        const totalImages = (album.imageList || []).length;
         const paginatedImages = album.imageList.slice(skip, skip + limit);
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: {
                 album: {
@@ -99,200 +81,117 @@ export const getAlbumBySlug = async (req: Request, res: Response, next: NextFunc
             },
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const editAlbumById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { id } = req.params;
-        console.log('🚀 ~ editAlbumById ~ id:', id);
 
-        const album = await Album.findByIdAndUpdate(id, {
-            ...req.body,
+        const album = await Album.findByIdAndUpdate(id, req.body, {
+            new: true,
+            runValidators: true,
         });
 
-        console.log(album);
+        if (!album) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Album không tồn tại để chỉnh sửa',
+            });
+        }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: album,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const deleteAlbumBySlug = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { slug } = req.params;
 
-        await Album.deleteOne({ slug });
+        const album = await Album.findOneAndDelete({ slug });
+        if (!album) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Album không tồn tại để xóa',
+            });
+        }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
-            message: 'Album deleted successfully',
+            message: 'Đã xóa album thành công',
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const addManyImageToAlbum = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET) as { userId: string };
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed to use this feature',
-            });
-        }
-
         const { slug } = req.params;
         const { imageList } = req.body;
 
         const album = await Album.findOne({ slug });
-
         if (!album) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Album not found',
+                message: 'Album không tồn tại',
             });
         }
 
-        // Validate the imageList format
-        if (!Array.isArray(imageList) || !imageList.every((img) => typeof img.url === 'string')) {
+        if (!Array.isArray(imageList) || !imageList.every((img) => typeof img?.url === 'string')) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid image list format',
+                message: 'Định dạng danh sách ảnh không hợp lệ',
             });
         }
 
-        // Update the imageList
         album.imageList = imageList;
         await album.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
-            message: 'Images added successfully',
+            message: 'Đã cập nhật danh sách ảnh vào album',
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const deleteManyImageAlbum = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET) as { userId: string };
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed to use this feature',
-            });
-        }
-
         const { slug } = req.params;
         const { imageUrls } = req.body;
 
         if (!Array.isArray(imageUrls) || !imageUrls.every((url) => typeof url === 'string')) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Invalid image URLs format',
+                message: 'Định dạng danh sách ảnh cần xóa không hợp lệ',
             });
         }
 
         const album = await Album.findOne({ slug });
-
         if (!album) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Album not found',
+                message: 'Album không tồn tại',
             });
         }
 
-        // Filter out the images that are in the imageUrls array
-        console.log('🚀 ~ deleteManyImageAlbum ~ album.imageList:', album.imageList);
-        album.imageList = album.imageList.filter((image: any) => !imageUrls.includes(image?.url));
+        album.imageList = (album.imageList || []).filter((image: any) => !imageUrls.includes(image?.url));
         await album.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
-            message: 'Images deleted successfully',
+            message: 'Đã xóa các ảnh khỏi album thành công',
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
@@ -304,15 +203,15 @@ export const getAlbumById = async (req: Request, res: Response, next: NextFuncti
         if (!album) {
             return res.status(404).json({
                 status: 'fail',
-                message: 'Album not found',
+                message: 'Album không tồn tại',
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: album,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };

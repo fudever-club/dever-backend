@@ -1,152 +1,131 @@
 import { Request, Response, NextFunction } from 'express';
-const jwt = require('jsonwebtoken');
-
-import { User } from '../models/UserModel';
-import { Social } from './../models/SocialModel';
+import { Social } from '../models/SocialModel';
 
 export const createSocial = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { name, constant } = req.body;
+        if (!name?.trim() || !constant?.trim()) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Tên nền tảng mạng xã hội và mã constant là bắt buộc',
+            });
+        }
 
-        await Social.create({
-            name,
-            constant,
+        const normalizedConstant = constant.trim().toUpperCase().replace(/\s+/g, '_');
+        const existing = await Social.findOne({ constant: normalizedConstant });
+        if (existing) {
+            return res.status(409).json({
+                status: 'error',
+                message: `Mạng xã hội với mã '${normalizedConstant}' đã tồn tại`,
+            });
+        }
+
+        const social = await Social.create({
+            name: name.trim(),
+            constant: normalizedConstant,
         });
-        res.status(200).json({
+
+        return res.status(201).json({
             status: 'success',
-            data: {
-                name,
-                constant,
-            },
+            data: social,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const getAllSocials = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const socials = await Social.find({});
-
-        res.status(200).json({
+        const socials = await Social.find({}).sort({ createdAt: 1 });
+        return res.status(200).json({
             status: 'success',
             data: socials,
             length: socials?.length,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const getSocialById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-
         const social = await Social.findById(id);
+        if (!social) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Mạng xã hội không tồn tại',
+            });
+        }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: 'success',
             data: social,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const editSocial = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { id } = req.params;
         const { name, constant } = req.body;
 
-        const social = await Social.findByIdAndUpdate(id, {
-            name,
-            constant,
-        });
+        const current = await Social.findById(id);
+        if (!current) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Mạng xã hội không tồn tại',
+            });
+        }
 
-        res.status(200).json({
+        const updateData: Record<string, string> = {};
+        if (name?.trim()) updateData.name = name.trim();
+        if (constant?.trim()) {
+            const nextConstant = constant.trim().toUpperCase().replace(/\s+/g, '_');
+            if (nextConstant !== current.constant) {
+                const existing = await Social.findOne({ constant: nextConstant, _id: { $ne: id } });
+                if (existing) {
+                    return res.status(409).json({
+                        status: 'error',
+                        message: `Mạng xã hội với mã '${nextConstant}' đã tồn tại`,
+                    });
+                }
+                updateData.constant = nextConstant;
+            }
+        }
+
+        const social = await Social.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
+        return res.status(200).json({
             status: 'success',
             data: social,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };
 
 export const deleteSocial = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const Authorization = req.header('authorization');
-        if (!Authorization) {
-            return res.status(400).json({
-                error: {
-                    statusCode: 400,
-                    status: 'error',
-                    message: 'Token is invalid',
-                },
-            });
-        }
-        const token = Authorization.replace('Bearer ', '');
-        const { userId } = jwt.verify(token, process.env.APP_SECRET);
-
-        const user = await User.findById(userId);
-
-        if (!user?.isAdmin) {
-            res.status(403).json({
-                status: 'error',
-                message: 'You are not allowed use this feature',
-            });
-        }
-
         const { id } = req.params;
+        const social = await Social.findById(id);
+        if (!social) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Mạng xã hội không tồn tại',
+            });
+        }
+
         await Social.findByIdAndDelete(id);
-        res.status(200).json({
+
+        return res.status(200).json({
             status: 'success',
+            message: 'Đã xóa mạng xã hội thành công',
             data: null,
         });
     } catch (err) {
-        next(err);
+        return next(err);
     }
 };

@@ -17,11 +17,14 @@ export const register = (_req: Request, _res: Response, next: NextFunction) => {
     return next(error);
 };
 
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const inputEmail = req.body.email ? req.body.email.trim().toLowerCase() : '';
         const password = typeof req.body.password === 'string' ? req.body.password : '';
-        const user = await User.findOne({ email: { $regex: new RegExp(`^${inputEmail}$`, 'i') } }).populate('positionId');
+        const safeEmail = escapeRegExp(inputEmail);
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } }).populate('positionId');
         if (!user || !password || !bcrypt.compareSync(password, user.password)) {
             const err: ErrorType = new Error('Email hoặc Mật khẩu không chính xác');
             err.status = 400;
