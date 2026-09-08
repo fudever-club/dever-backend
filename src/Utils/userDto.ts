@@ -76,6 +76,7 @@ export const toPublicUserDto = (user: any) => {
         majorId: referenceDto(source?.majorId),
         gen: source?.gen || null,
         isExcellent: Boolean(source?.isExcellent),
+        isLeader: Boolean(source?.isLeader),
         exp: typeof source?.exp === 'number' ? source.exp : 150,
         streakDays: typeof source?.streakDays === 'number' ? source.streakDays : 1,
         unlockedBadges: Array.isArray(source?.unlockedBadges) ? source.unlockedBadges : [],

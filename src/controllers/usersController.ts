@@ -143,6 +143,15 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                             .map((id) => new mongoose.Types.ObjectId(id.trim())),
                     };
                 }
+                if (filter.isLeader !== undefined) {
+                    if (filter.isLeader === 'true' || filter.isLeader === true) {
+                        filter.isLeader = true;
+                    } else if (filter.isLeader === 'false' || filter.isLeader === false) {
+                        filter.isLeader = false;
+                    } else {
+                        delete filter.isLeader;
+                    }
+                }
                 if (!admin) {
                     delete filter.MSSV;
                     delete filter.email;
