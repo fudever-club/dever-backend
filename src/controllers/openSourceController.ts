@@ -194,3 +194,83 @@ export const deleteOpenSourceProject = async (req: Request, res: Response, next:
         return next(error);
     }
 };
+
+/**
+ * Member retrieves their own submitted Open-Source projects (including pending approval)
+ */
+export const getMySubmittedProjects = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Vui lòng đăng nhập để xem dự án cá nhân' });
+        }
+        const projects = await OpenSourceProject.find({ authorId: userId }).sort({ createdAt: -1 });
+        return res.status(200).json({ status: 'success', results: projects.length, data: projects });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * Admin 1-click approve and publish an Open-Source project (+150 EXP and Core Contributor badge)
+ */
+export const approveOpenSourceProject = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const project = await OpenSourceProject.findById(req.params.id);
+        if (!project) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy dự án' });
+        }
+
+        const wasPublished = project.isPublished;
+        project.isPublished = true;
+        await project.save();
+
+        if (!wasPublished && project.authorId) {
+            await User.findByIdAndUpdate(project.authorId, {
+                $inc: { exp: 150 },
+                $addToSet: { unlockedBadges: { badgeId: 'core_contributor', unlockedAt: new Date() } },
+            });
+
+            createNotification({
+                recipientId: project.authorId.toString(),
+                type: 'badge_unlocked',
+                title: 'Dự án của bạn đã được xuất bản! 🌟',
+                message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
+                link: '/discover',
+                meta: { project, milestone: { badgeTitle: 'Core Contributor' } },
+                sendTelegram: true,
+            }).catch(() => {});
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Đã duyệt và xuất bản dự án thành công!',
+            data: project,
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * Admin reject or unpublish an Open-Source project
+ */
+export const rejectOpenSourceProject = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const project = await OpenSourceProject.findById(req.params.id);
+        if (!project) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy dự án' });
+        }
+
+        project.isPublished = false;
+        await project.save();
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Đã ẩn dự án khỏi trang công khai.',
+            data: project,
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
