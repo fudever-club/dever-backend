@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import path from 'path';
 import multer from 'multer';
 import { uploadToStorage, getFileFromStorage } from '../services/storageService';
 
@@ -137,8 +138,35 @@ export const serveFile = async (req: Request, res: Response, next: NextFunction)
       return res.status(404).json({ status: 'error', message: 'Không tìm thấy file tài liệu trên hệ thống lưu trữ' });
     }
 
-    res.setHeader('Content-Type', fileObj.contentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileObj.filename)}"`);
+    const ext = path.extname(fileObj.filename).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.ogg': 'audio/ogg',
+      '.m4a': 'audio/mp4',
+      '.pdf': 'application/pdf',
+    };
+    const inferredMime = mimeMap[ext];
+    const rawContentType = fileObj.contentType;
+    const contentType = (rawContentType && rawContentType !== 'application/octet-stream')
+      ? rawContentType
+      : (inferredMime || rawContentType || 'application/octet-stream');
+
+    const isMediaOrDocInline =
+      contentType.startsWith('image/') ||
+      contentType.startsWith('audio/') ||
+      contentType === 'application/pdf';
+    const disposition = isMediaOrDocInline ? 'inline' : 'attachment';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(fileObj.filename)}"`);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     if (fileObj.contentLength) {
       res.setHeader('Content-Length', fileObj.contentLength);
     }
