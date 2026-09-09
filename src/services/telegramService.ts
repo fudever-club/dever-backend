@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc';
-const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '7465099987';
-const TELEGRAM_ENABLED = process.env.TELEGRAM_NOTIFICATIONS_ENABLED !== 'false';
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc';
+export const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '7465099987';
+export const TELEGRAM_ENABLED = process.env.TELEGRAM_NOTIFICATIONS_ENABLED !== 'false';
 
 /**
  * Core function to dispatch messages through Telegram Bot API
@@ -10,7 +10,8 @@ const TELEGRAM_ENABLED = process.env.TELEGRAM_NOTIFICATIONS_ENABLED !== 'false';
 export const sendTelegramMessage = async (
     chatId: string | number = TELEGRAM_ADMIN_CHAT_ID,
     text: string,
-    parseMode: 'HTML' | 'Markdown' = 'HTML'
+    parseMode: 'HTML' | 'Markdown' = 'HTML',
+    replyMarkup?: any
 ): Promise<{ success: boolean; data?: any; error?: string }> => {
     if (!TELEGRAM_ENABLED || !TELEGRAM_BOT_TOKEN) {
         console.log('[TelegramBot] Notifications disabled or missing token.');
@@ -19,16 +20,18 @@ export const sendTelegramMessage = async (
 
     try {
         const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-        const response = await axios.post(
-            url,
-            {
-                chat_id: chatId,
-                text,
-                parse_mode: parseMode,
-                disable_web_page_preview: false,
-            },
-            { timeout: 8000 }
-        );
+        const payload: any = {
+            chat_id: chatId,
+            text,
+            parse_mode: parseMode,
+            disable_web_page_preview: false,
+        };
+
+        if (replyMarkup) {
+            payload.reply_markup = replyMarkup;
+        }
+
+        const response = await axios.post(url, payload, { timeout: 8000 });
 
         if (response.data && response.data.ok) {
             return { success: true, data: response.data.result };
@@ -157,3 +160,102 @@ export const testTelegramBotConnection = async (customChatId?: string | number) 
 
     return await sendTelegramMessage(target, testMsg);
 };
+
+/**
+ * 6. Answer a Telegram Callback Query (for inline buttons)
+ */
+export const answerCallbackQuery = async (
+    callbackQueryId: string,
+    text?: string,
+    showAlert: boolean = false
+): Promise<boolean> => {
+    if (!TELEGRAM_BOT_TOKEN) return false;
+    try {
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
+        await axios.post(
+            url,
+            {
+                callback_query_id: callbackQueryId,
+                text,
+                show_alert: showAlert,
+            },
+            { timeout: 8000 }
+        );
+        return true;
+    } catch (err: any) {
+        console.error('[Telegram answerCallbackQuery Error]:', err?.response?.data || err.message);
+        return false;
+    }
+};
+
+/**
+ * 7. Edit message text & inline buttons in-place on Telegram
+ */
+export const editTelegramMessageText = async (
+    chatId: string | number,
+    messageId: number,
+    text: string,
+    replyMarkup?: any
+): Promise<boolean> => {
+    if (!TELEGRAM_BOT_TOKEN) return false;
+    try {
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`;
+        const payload: any = {
+            chat_id: chatId,
+            message_id: messageId,
+            text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: false,
+        };
+        if (replyMarkup) {
+            payload.reply_markup = replyMarkup;
+        }
+
+        await axios.post(url, payload, { timeout: 8000 });
+        return true;
+    } catch (err: any) {
+        console.error('[Telegram editMessageText Error]:', err?.response?.data || err.message);
+        return false;
+    }
+};
+
+/**
+ * 8. Alert Admin with 1-Click Interactive Inline Buttons when a member submits a project
+ */
+export const notifyAdminNewOpenSourceSubmission = async (project: any, authorName: string) => {
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.fudever.com';
+    const reviewUrl = `${adminUrl}/vi/community-content?tab=opensource&filter=pending`;
+    const title = project.title || 'Dự án mới';
+    const githubUrl = project.githubUrl || 'https://github.com';
+    const category = project.category || 'Open Source';
+    const desc = project.description ? (project.description.length > 200 ? project.description.slice(0, 200) + '...' : project.description) : '';
+
+    const message = `
+💻 <b>[FU-DEVER COMMUNITY] CÓ DỰ ÁN MÃ NGUỒN MỞ MỚI GỬI DUYỆT!</b>
+
+📌 <b>Tên dự án:</b> <b>${title}</b>
+👤 <b>Tác giả:</b> ${authorName}
+📂 <b>GitHub:</b> ${githubUrl}
+🏷️ <b>Chuyên mục:</b> ${category}
+${project.demoUrl ? `🌐 <b>Demo Link:</b> ${project.demoUrl}\n` : ''}${desc ? `📝 <b>Mô tả:</b> ${desc}\n` : ''}📅 <b>Gửi lúc:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+
+👉 <a href="${reviewUrl}"><b>Xem và duyệt dự án trên admin dashboard (Nội dung cộng đồng &amp; Alumni)</b></a>
+
+<i>Bấm các nút bên dưới để Phê duyệt hoặc Từ chối tức thì:</i>
+`.trim();
+
+    const inlineKeyboard = {
+        inline_keyboard: [
+            [
+                { text: '✅ Phê duyệt (+150 EXP)', callback_data: `approve_project:${project._id}` },
+                { text: '❌ Từ chối / Ẩn', callback_data: `reject_project:${project._id}` },
+            ],
+            [
+                { text: '🌐 Mở trang Nội dung cộng đồng & Alumni', url: reviewUrl },
+            ],
+        ],
+    };
+
+    return await sendTelegramMessage(TELEGRAM_ADMIN_CHAT_ID, message, 'HTML', inlineKeyboard);
+};
+

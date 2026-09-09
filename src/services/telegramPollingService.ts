@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { processTelegramMessage } from '../controllers/telegramWebhookController';
+import { processTelegramMessage, processTelegramCallbackQuery } from '../controllers/telegramWebhookController';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc';
 const TELEGRAM_ENABLED = process.env.TELEGRAM_NOTIFICATIONS_ENABLED !== 'false';
@@ -24,7 +24,7 @@ export const startTelegramPolling = async () => {
                 const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`;
                 const params: any = {
                     timeout: 10,
-                    allowed_updates: ['message'],
+                    allowed_updates: ['message', 'callback_query'],
                 };
                 if (currentOffset > 0) {
                     params.offset = currentOffset;
@@ -37,6 +37,14 @@ export const startTelegramPolling = async () => {
                     for (const update of updates) {
                         currentOffset = update.update_id + 1;
 
+                        // 1. Process Telegram Inline Button Callbacks (1-Click Approve / Reject)
+                        if (update.callback_query) {
+                            await processTelegramCallbackQuery(update.callback_query).catch((err) => {
+                                console.error('[Telegram Polling Callback Error]:', err);
+                            });
+                        }
+
+                        // 2. Process Chat Messages & Commands
                         const message = update.message;
                         if (message && message.text) {
                             const chatId = message.chat?.id;

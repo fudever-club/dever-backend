@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { OpenSourceProject } from '../models/OpenSourceProjectModel';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
-import { sendTelegramMessage } from '../services/telegramService';
+import { sendTelegramMessage, notifyAdminNewOpenSourceSubmission } from '../services/telegramService';
 
 const INITIAL_PROJECTS = [
     {
@@ -116,22 +116,12 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
             type: 'system_alert',
             title: 'Dự án Open Source mới gửi duyệt 💻',
             message: `Thành viên ${authorName} vừa gửi dự án "${title}" lên hàng đợi duyệt.`,
-            link: '/vi/community-content',
+            link: '/vi/community-content?tab=opensource&filter=pending',
             meta: { project },
-            sendTelegram: true,
+            sendTelegram: false,
         }).catch(() => {});
 
-        const telegramMsg = `
-💻 <b>[FU-DEVER PROJECT LAB] CÓ DỰ ÁN MỚI GỬI DUYỆT!</b>
-
-📌 <b>Tên dự án:</b> ${title}
-👤 <b>Tác giả:</b> ${authorName}
-📂 <b>GitHub:</b> ${githubUrl}
-🏷️ <b>Chuyên mục:</b> ${category || 'Open Source'}
-
-👉 <a href="${process.env.ADMIN_URL || 'https://admin.fudever.com'}/vi/community-content"><b>XEM VÀ DUYỆT DỰ ÁN TRÊN ADMIN DASHBOARD</b></a>
-`.trim();
-        sendTelegramMessage(undefined, telegramMsg).catch(() => {});
+        notifyAdminNewOpenSourceSubmission(project, authorName).catch(() => {});
 
         return res.status(201).json({
             status: 'success',

@@ -2,9 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import { observabilityService } from '../services/observabilityService';
 import { invalidateCache, memoryCache } from '../services/cacheService';
-
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc';
-const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '7465099987';
+import { OpenSourceProject } from '../models/OpenSourceProjectModel';
+import { User } from '../models/UserModel';
+import { createNotification } from '../services/notificationService';
+import {
+    TELEGRAM_ADMIN_CHAT_ID,
+    TELEGRAM_BOT_TOKEN,
+    answerCallbackQuery,
+    editTelegramMessageText,
+    notifyAdminNewOpenSourceSubmission,
+} from '../services/telegramService';
 
 /**
  * Send reply with custom keyboard buttons to Telegram chat
@@ -14,8 +21,8 @@ export const replyTelegram = async (chatId: string | number, text: string, showK
         const keyboard = {
             keyboard: [
                 [{ text: '🩺 Health & Uptime' }, { text: '📊 Thống Kê Nhanh' }],
-                [{ text: '🐞 Lỗi Gần Nhất' }, { text: '🧹 Xóa Cache' }],
-                [{ text: '❓ Trợ Giúp' }],
+                [{ text: '💻 Dự Án Chờ Duyệt' }, { text: '🐞 Lỗi Gần Nhất' }],
+                [{ text: '🧹 Xóa Cache' }, { text: '❓ Trợ Giúp' }],
             ],
             resize_keyboard: true,
             one_time_keyboard: false,
@@ -149,15 +156,38 @@ ${idx + 1}. [${err.source.toUpperCase()}] <b>${err.message.slice(0, 100)}</b>
         return;
     }
 
-    // 5. /start or /help or default
+    // 5. /projects or /pending or "💻 Dự Án Chờ Duyệt"
+    if (command === '/projects' || command === '/pending' || rawText === '💻 Dự Án Chờ Duyệt') {
+        const pendingList = await OpenSourceProject.find({ isPublished: false }).sort({ createdAt: -1 });
+        if (pendingList.length === 0) {
+            await replyTelegram(
+                chatId,
+                `🎉 <b>Không có dự án nào đang chờ duyệt!</b>\nToàn bộ dự án cộng đồng gửi lên đều đã được xuất bản.`
+            );
+            return;
+        }
+
+        await replyTelegram(
+            chatId,
+            `📋 <b>[HÀNG ĐỢI DUYỆT DỰ ÁN]</b>\nHiện có <b>${pendingList.length}</b> dự án đang chờ duyệt. Danh sách chi tiết:`
+        );
+
+        for (const p of pendingList) {
+            await notifyAdminNewOpenSourceSubmission(p, p.author || 'Thành viên DEVER');
+        }
+        return;
+    }
+
+    // 6. /start or /help or default
     const helpMsg = `
 🤖 <b>[FU-DEVER POCKET DEVOPS BOT]</b>
 Xin chào Ban Quản Trị! Dưới đây là các câu lệnh điều khiển hệ thống:
 
 🩺 <b>/health</b>: Tra cứu Uptime, RAM, DB Status & Tỉ lệ Cache Hit
 📊 <b>/stats</b>: Báo cáo số lượng thành viên, blog chờ duyệt, quỹ
+💻 <b>/projects</b> (hoặc <b>/pending</b>): Duyệt nhanh các dự án mã nguồn mở thành viên gửi
 🐞 <b>/errors</b>: Xem 5 lỗi mới nhất trong hệ thống
-🧹 <b>/clearcache [group]</b>: Xóa cache khẩn cấp (vd: <code>/clearcache blogs</code> hoặc <code>/clearcache all</code>)
+🧹 <b>/clearcache [group]</b>: Xóa cache khẩn cấp (vd: <code>/clearcache projects</code> hoặc <code>/clearcache all</code>)
 ❓ <b>/help</b>: Xem menu hướng dẫn này
 
 <i>Bạn cũng có thể bấm các nút thao tác nhanh ngay bên dưới bàn phím!</i>
@@ -167,10 +197,146 @@ Xin chào Ban Quản Trị! Dưới đây là các câu lệnh điều khiển h
 };
 
 /**
+ * Handle Telegram Interactive Inline Button Callbacks (1-Click Approve / Reject)
+ */
+export const processTelegramCallbackQuery = async (callbackQuery: any) => {
+    if (!callbackQuery) return;
+
+    const queryId = callbackQuery.id;
+    const data = (callbackQuery.data || '').trim();
+    const chatId = callbackQuery.message?.chat?.id || callbackQuery.from?.id;
+    const messageId = callbackQuery.message?.message_id;
+    const fromUser = callbackQuery.from?.username ? `@${callbackQuery.from.username}` : callbackQuery.from?.first_name || 'Admin';
+    const originalText = callbackQuery.message?.text || '';
+
+    // Security check: Only Admin chat ID can execute approve/reject callbacks
+    if (chatId?.toString() !== TELEGRAM_ADMIN_CHAT_ID.toString()) {
+        console.warn(`[Telegram Callback Security] Unauthorized callback from ${chatId} (${fromUser}): ${data}`);
+        await answerCallbackQuery(queryId, '⛔ Bạn không có quyền thực hiện hành động này!', true);
+        return;
+    }
+
+    const adminUrl = process.env.ADMIN_URL || 'https://admin.fudever.com';
+    const reviewUrl = `${adminUrl}/vi/community-content?tab=opensource&filter=pending`;
+
+    // 1. Approve Open Source Project: approve_project:<projectId>
+    if (data.startsWith('approve_project:')) {
+        const projectId = data.replace('approve_project:', '').trim();
+        const project = await OpenSourceProject.findById(projectId);
+
+        if (!project) {
+            await answerCallbackQuery(queryId, '⚠️ Không tìm thấy dự án trong hệ thống!', true);
+            return;
+        }
+
+        if (project.isPublished) {
+            await answerCallbackQuery(queryId, 'ℹ️ Dự án này đã được phê duyệt từ trước.', false);
+            return;
+        }
+
+        project.isPublished = true;
+        await project.save();
+
+        let authorName = project.author || 'Thành viên DEVER';
+        if (project.authorId) {
+            const author = await User.findById(project.authorId);
+            if (author) {
+                authorName = [author.firstname, author.lastname].filter(Boolean).join(' ') || author.nickname || authorName;
+                author.exp = (author.exp || 0) + 150;
+                author.unlockedBadges = author.unlockedBadges || [];
+                const alreadyHasBadge = author.unlockedBadges.some((b: any) => b.badgeId === 'core_contributor');
+                if (!alreadyHasBadge) {
+                    author.unlockedBadges.push({ badgeId: 'core_contributor', unlockedAt: new Date() });
+                }
+                await author.save();
+
+                createNotification({
+                    recipientId: project.authorId.toString(),
+                    type: 'badge_unlocked',
+                    title: 'Dự án của bạn đã được xuất bản! 🌟',
+                    message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
+                    link: '/discover',
+                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: author },
+                    sendTelegram: false,
+                }).catch(() => {});
+            }
+        }
+
+        invalidateCache('projects');
+
+        // Instant toast alert to Telegram user
+        await answerCallbackQuery(queryId, '🎉 Đã phê duyệt! +150 EXP & Huy hiệu Core Contributor đã được trao.', false);
+
+        // Edit original message to remove action buttons and display success confirmation
+        if (messageId) {
+            const updatedText = `
+${originalText}
+
+━━━━━━━━━━━━━━━━━━━━
+✅ <b>ĐÃ PHÊ DUYỆT VÀ XUẤT BẢN THÀNH CÔNG</b>
+👤 <b>Người duyệt:</b> ${fromUser}
+⏱️ <b>Thời gian:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+`.trim();
+
+            const singleButtonKeyboard = {
+                inline_keyboard: [
+                    [{ text: '🌐 Xem trên Admin Dashboard (Nội dung cộng đồng & Alumni)', url: reviewUrl }],
+                ],
+            };
+
+            await editTelegramMessageText(chatId, messageId, updatedText, singleButtonKeyboard);
+        }
+        return;
+    }
+
+    // 2. Reject / Hide Open Source Project: reject_project:<projectId>
+    if (data.startsWith('reject_project:')) {
+        const projectId = data.replace('reject_project:', '').trim();
+        const project = await OpenSourceProject.findById(projectId);
+
+        if (!project) {
+            await answerCallbackQuery(queryId, '⚠️ Không tìm thấy dự án!', true);
+            return;
+        }
+
+        project.isPublished = false;
+        await project.save();
+        invalidateCache('projects');
+
+        await answerCallbackQuery(queryId, '❌ Đã chuyển dự án về trạng thái Chưa xuất bản.', false);
+
+        if (messageId) {
+            const updatedText = `
+${originalText}
+
+━━━━━━━━━━━━━━━━━━━━
+❌ <b>ĐÃ TỪ CHỐI / ẨN KHỎI SHOWCASE CÔNG KHAI</b>
+👤 <b>Người xử lý:</b> ${fromUser}
+⏱️ <b>Thời gian:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+`.trim();
+
+            const singleButtonKeyboard = {
+                inline_keyboard: [
+                    [{ text: '🌐 Xem trên Admin Dashboard (Nội dung cộng đồng & Alumni)', url: reviewUrl }],
+                ],
+            };
+
+            await editTelegramMessageText(chatId, messageId, updatedText, singleButtonKeyboard);
+        }
+        return;
+    }
+};
+
+/**
  * Webhook endpoint for Telegram interactive commands
  */
 export const handleTelegramWebhook = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        if (req.body?.callback_query) {
+            await processTelegramCallbackQuery(req.body.callback_query);
+            return res.status(200).json({ ok: true });
+        }
+
         const message = req.body?.message || req.body?.edited_message;
         if (!message || !message.text) {
             return res.status(200).json({ ok: true, note: 'No text message' });
