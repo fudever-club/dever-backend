@@ -27,16 +27,25 @@
 - **Xác thực & Bảo mật (Auth & Security):** JWT Token, mã hóa mật khẩu Bcrypt, phân quyền theo vai trò (User, Member, Admin, President).
 - **Hệ thống Gamification & Điểm danh vọng:** Bảng xếp hạng Hall of Fame, chuỗi ngày Streak, tính toán EXP tự động khi giải bài LeetCode hoặc viết Blog.
 - **Tích hợp Cloudflare R2 Storage:** Quản lý tải lên hình ảnh, tài liệu và avatar tốc độ cao chuẩn giao thức S3.
-- **Cầu nối Telegram Bot Automation (@Fudever_bot):** Tự động gửi thông báo tức thì tới Ban Quản Trị và Ban Chủ Nhiệm khi có bài viết mới, dự án Open Source cần duyệt hoặc cảnh báo hệ thống.
+- **Cầu nối Telegram Bot Automation (@Fudever_bot):** Tự động gửi thông báo tức thì tới Ban Quản Trị khi có bài viết mới hoặc sự cố nghiêm trọng, đồng thời cho phép tương tác 2 chiều (Pocket DevOps Bot) tra cứu tình trạng máy chủ trực tiếp trên Telegram.
+- **Bộ nhớ đệm siêu tốc (In-Memory Caching):** Phản hồi < 5ms cho các API đọc nhiều (`/blogs`, `/leetcode`, `/events`, `/resources`), tự động xóa cache (auto-invalidation) tức thì khi dữ liệu thay đổi.
 - **Quản lý dữ liệu học thuật:** Cung cấp API cho Sự kiện, Bài viết kỹ thuật, Album hoạt động, Dự án Lab, Tài nguyên PE FPTU.
 
 ---
 
-## 🚀 Điểm Kiểm Tra Trạng Thái (Health & Monitoring)
+## 🚀 Điểm Kiểm Tra Trạng Thái & Điều Hành (Health, Caching & DevOps Bot)
 
 - **Liveness Health Check:** `GET /health` ➔ `{"status": "ok"}`
 - **Readiness Check (MongoDB Connection):** `GET /ready` ➔ `{"status": "ready"}`
+- **Bộ nhớ đệm Route (HTTP Headers):** Phản hồi các header `X-Cache: HIT` hoặc `X-Cache: MISS` kèm `Cache-Control: public, max-age=60, stale-while-revalidate=30`.
 - **Tài liệu API (Swagger Docs):** `GET /docs` khi chạy ở chế độ dev.
+- **Telegram Pocket DevOps Bot:**
+  - `/health`: Trả về Uptime, Database readiness, RAM RSS/Heap, Tỉ lệ trúng Cache.
+  - `/stats`: Báo cáo số lượng thành viên, bài viết blog chờ duyệt, quỹ CLB.
+  - `/errors`: Xem 5 lỗi mới nhất trong Circular Error Buffer.
+  - `/clearcache [group]`: Xóa cache khẩn cấp từ xa.
+  - Endpoint Webhook: `POST /api/v1/telegram/webhook`
+  - Ingestion báo cáo lỗi: `POST /api/v1/telemetry/report-error`
 
 ---
 
