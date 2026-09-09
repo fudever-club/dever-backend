@@ -197,8 +197,12 @@ process.on('uncaughtException', (error: Error) => {
 });
 
 import { socketServer } from './src/socket';
+import { startTelegramPolling } from './src/services/telegramPollingService';
+
 socketServer.init(server);
 socketServer.onConnection();
 server.listen(port, () => {
     console.log(`connected to port successfully http://localhost:${port}/ `);
+    // Start Telegram polling to automatically receive & reply to admin commands
+    startTelegramPolling();
 });

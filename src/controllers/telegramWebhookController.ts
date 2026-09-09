@@ -9,7 +9,7 @@ const TELEGRAM_ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID || '7465099987
 /**
  * Send reply with custom keyboard buttons to Telegram chat
  */
-const replyTelegram = async (chatId: string | number, text: string, showKeyboard: boolean = true) => {
+export const replyTelegram = async (chatId: string | number, text: string, showKeyboard: boolean = true) => {
     try {
         const keyboard = {
             keyboard: [
@@ -42,36 +42,30 @@ const replyTelegram = async (chatId: string | number, text: string, showKeyboard
 };
 
 /**
- * 1. Webhook endpoint for Telegram interactive commands
+ * Unified processor for Telegram commands (Invoked via Webhook OR Long Polling)
  */
-export const handleTelegramWebhook = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const message = req.body?.message || req.body?.edited_message;
-        if (!message || !message.text) {
-            return res.status(200).json({ ok: true, note: 'No text message' });
-        }
+export const processTelegramMessage = async (
+    chatId: string | number,
+    rawText: string,
+    fromUser: string = 'User'
+) => {
+    // Security check: Only Admin chat ID is authorized to command the bot
+    if (chatId.toString() !== TELEGRAM_ADMIN_CHAT_ID.toString()) {
+        console.warn(`[Telegram Security] Unauthorized command attempt from chat ${chatId} (${fromUser}): ${rawText}`);
+        await replyTelegram(
+            chatId,
+            `⛔ <b>Từ chối quyền truy cập!</b>\nBạn không có quyền tương tác với hệ thống điều hành FU-DEVER. Sự kiện đã được ghi nhận.`,
+            false
+        );
+        return;
+    }
 
-        const chatId = message.chat?.id;
-        const rawText = (message.text || '').trim();
-        const fromUser = message.from?.username ? `@${message.from.username}` : message.from?.first_name || 'User';
+    const command = rawText.toLowerCase().trim();
 
-        // Security check: Only Admin chat ID is authorized to command the bot
-        if (chatId.toString() !== TELEGRAM_ADMIN_CHAT_ID.toString()) {
-            console.warn(`[Telegram Security] Unauthorized command attempt from chat ${chatId} (${fromUser}): ${rawText}`);
-            await replyTelegram(
-                chatId,
-                `⛔ <b>Từ chối quyền truy cập!</b>\nBạn không có quyền tương tác với hệ thống điều hành FU-DEVER. Sự kiện đã được ghi nhận.`,
-                false
-            );
-            return res.status(200).json({ ok: true });
-        }
-
-        const command = rawText.toLowerCase();
-
-        // 1. /health or "🩺 Health & Uptime"
-        if (command === '/health' || command === '/status' || rawText === '🩺 Health & Uptime') {
-            const health = observabilityService.getSystemHealthMetrics();
-            const reply = `
+    // 1. /health or "🩺 Health & Uptime"
+    if (command === '/health' || command === '/status' || rawText === '🩺 Health & Uptime') {
+        const health = observabilityService.getSystemHealthMetrics();
+        const reply = `
 🩺 <b>[FU-DEVER SYSTEM HEALTH & METRICS]</b>
 ━━━━━━━━━━━━━━━━━━━━
 📊 <b>Trạng thái:</b> <b>${health.status === 'HEALTHY' ? '🟢 HOẠT ĐỘNG TỐT (HEALTHY)' : '🟡 CẢNH BÁO (DEGRADED)'}</b>
@@ -85,16 +79,16 @@ export const handleTelegramWebhook = async (req: Request, res: Response, next: N
   • Tỉ lệ trúng: <b>${health.cache.hitRate}</b> (${health.cache.hits} hits / ${health.cache.misses} misses)
 ⚙️ <b>Môi trường:</b> Node <code>${health.nodeVersion}</code> | <code>${health.platform}</code>
 🐞 <b>Lỗi lưu trong Buffer:</b> <code>${health.errorBufferCount} sự cố</code>
-            `.trim();
+        `.trim();
 
-            await replyTelegram(chatId, reply);
-            return res.status(200).json({ ok: true });
-        }
+        await replyTelegram(chatId, reply);
+        return;
+    }
 
-        // 2. /stats or "📊 Thống Kê Nhanh"
-        if (command === '/stats' || rawText === '📊 Thống Kê Nhanh') {
-            const stats = await observabilityService.getQuickStats();
-            const reply = `
+    // 2. /stats or "📊 Thống Kê Nhanh"
+    if (command === '/stats' || rawText === '📊 Thống Kê Nhanh') {
+        const stats = await observabilityService.getQuickStats();
+        const reply = `
 📊 <b>[FU-DEVER BÁO CÁO THỐNG KÊ NHANH]</b>
 ━━━━━━━━━━━━━━━━━━━━
 👥 <b>Tổng số thành viên:</b> <b>${stats.userCount}</b> người dùng
@@ -103,60 +97,60 @@ export const handleTelegramWebhook = async (req: Request, res: Response, next: N
 🏆 <b>Thành viên liên kết LeetCode:</b> <b>${stats.leetcodeCount}</b> lập trình viên
 
 👉 <i>Mọi chỉ số đều cập nhật trực tiếp theo thời gian thực từ MongoDB.</i>
-            `.trim();
+        `.trim();
 
-            await replyTelegram(chatId, reply);
-            return res.status(200).json({ ok: true });
+        await replyTelegram(chatId, reply);
+        return;
+    }
+
+    // 3. /errors or "🐞 Lỗi Gần Nhất"
+    if (command === '/errors' || rawText === '🐞 Lỗi Gần Nhất') {
+        const recentErrors = observabilityService.getRecentErrors(5);
+        if (recentErrors.length === 0) {
+            await replyTelegram(
+                chatId,
+                `🎉 <b>Tuyệt vời!</b>\nKhông có lỗi nào được ghi nhận gần đây trong bộ đệm hệ thống.`
+            );
+            return;
         }
 
-        // 3. /errors or "🐞 Lỗi Gần Nhất"
-        if (command === '/errors' || rawText === '🐞 Lỗi Gần Nhất') {
-            const recentErrors = observabilityService.getRecentErrors(5);
-            if (recentErrors.length === 0) {
-                await replyTelegram(
-                    chatId,
-                    `🎉 <b>Tuyệt vời!</b>\nKhông có lỗi nào được ghi nhận gần đây trong bộ đệm hệ thống.`
-                );
-                return res.status(200).json({ ok: true });
-            }
-
-            let errorListHtml = `🐞 <b>[DANH SÁCH ${recentErrors.length} LỖI GẦN NHẤT]</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
-            recentErrors.forEach((err, idx) => {
-                const time = err.timestamp.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-                errorListHtml += `
+        let errorListHtml = `🐞 <b>[DANH SÁCH ${recentErrors.length} LỖI GẦN NHẤT]</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+        recentErrors.forEach((err, idx) => {
+            const time = err.timestamp.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+            errorListHtml += `
 ${idx + 1}. [${err.source.toUpperCase()}] <b>${err.message.slice(0, 100)}</b>
    📍 Route: <code>${err.method || 'GET'} ${err.route || 'N/A'}</code>
    🔢 Status: <code>${err.statusCode || 'N/A'}</code>
    ⏱️ Lúc: <i>${time}</i>
 `;
-            });
+        });
 
-            await replyTelegram(chatId, errorListHtml.trim());
-            return res.status(200).json({ ok: true });
+        await replyTelegram(chatId, errorListHtml.trim());
+        return;
+    }
+
+    // 4. /clearcache or "🧹 Xóa Cache"
+    if (command.startsWith('/clearcache') || rawText === '🧹 Xóa Cache') {
+        const parts = rawText.split(' ');
+        const targetGroup = parts[1]?.toLowerCase();
+
+        let cleared = 0;
+        if (!targetGroup || targetGroup === 'all') {
+            cleared = memoryCache.clear();
+        } else {
+            cleared = invalidateCache(targetGroup);
         }
 
-        // 4. /clearcache or "🧹 Xóa Cache"
-        if (command.startsWith('/clearcache') || rawText === '🧹 Xóa Cache') {
-            const parts = rawText.split(' ');
-            const targetGroup = parts[1]?.toLowerCase();
+        const targetName = targetGroup ? `nhóm [${targetGroup}]` : 'toàn bộ hệ thống';
+        await replyTelegram(
+            chatId,
+            `🧹 <b>Đã xóa thành công bộ nhớ cache!</b>\nĐã giải phóng <b>${cleared}</b> bản ghi cache ${targetName}.`
+        );
+        return;
+    }
 
-            let cleared = 0;
-            if (!targetGroup || targetGroup === 'all') {
-                cleared = memoryCache.clear();
-            } else {
-                cleared = invalidateCache(targetGroup);
-            }
-
-            const targetName = targetGroup ? `nhóm [${targetGroup}]` : 'toàn bộ hệ thống';
-            await replyTelegram(
-                chatId,
-                `🧹 <b>Đã xóa thành công bộ nhớ cache!</b>\nĐã giải phóng <b>${cleared}</b> bản ghi cache ${targetName}.`
-            );
-            return res.status(200).json({ ok: true });
-        }
-
-        // 5. /start or /help or default
-        const helpMsg = `
+    // 5. /start or /help or default
+    const helpMsg = `
 🤖 <b>[FU-DEVER POCKET DEVOPS BOT]</b>
 Xin chào Ban Quản Trị! Dưới đây là các câu lệnh điều khiển hệ thống:
 
@@ -167,9 +161,26 @@ Xin chào Ban Quản Trị! Dưới đây là các câu lệnh điều khiển h
 ❓ <b>/help</b>: Xem menu hướng dẫn này
 
 <i>Bạn cũng có thể bấm các nút thao tác nhanh ngay bên dưới bàn phím!</i>
-        `.trim();
+    `.trim();
 
-        await replyTelegram(chatId, helpMsg);
+    await replyTelegram(chatId, helpMsg);
+};
+
+/**
+ * Webhook endpoint for Telegram interactive commands
+ */
+export const handleTelegramWebhook = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const message = req.body?.message || req.body?.edited_message;
+        if (!message || !message.text) {
+            return res.status(200).json({ ok: true, note: 'No text message' });
+        }
+
+        const chatId = message.chat?.id;
+        const rawText = (message.text || '').trim();
+        const fromUser = message.from?.username ? `@${message.from.username}` : message.from?.first_name || 'User';
+
+        await processTelegramMessage(chatId, rawText, fromUser);
         return res.status(200).json({ ok: true });
     } catch (error) {
         next(error);
@@ -177,7 +188,7 @@ Xin chào Ban Quản Trị! Dưới đây là các câu lệnh điều khiển h
 };
 
 /**
- * 2. Endpoint for Client ErrorBoundary to report runtime crashes
+ * Endpoint for Client ErrorBoundary to report runtime crashes
  */
 export const reportClientError = async (req: Request, res: Response, next: NextFunction) => {
     try {
