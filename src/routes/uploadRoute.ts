@@ -12,6 +12,7 @@ import { requireAuth } from '../middlewares/auth';
 
 const Router = express.Router();
 
+Router.post('/', requireAuth, uploadImageMiddleware, uploadImage);
 Router.post('/image', requireAuth, uploadImageMiddleware, uploadImage);
 Router.post('/document', requireAuth, uploadDocumentMiddleware, uploadDocument);
 Router.post('/audio', requireAuth, uploadAudioMiddleware, uploadAudio);

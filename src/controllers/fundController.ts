@@ -101,6 +101,14 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
             });
         }
 
+        // Database protection guard: prevent storing huge Base64 strings into MongoDB
+        if (typeof proofImageUrl === 'string' && (proofImageUrl.startsWith('data:image/') || proofImageUrl.length > 10000)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Hình ảnh minh chứng phải được tải lên hệ thống lưu trữ Cloudflare R2 trước khi xác nhận (không chấp nhận chuỗi Base64).',
+            });
+        }
+
         const campaign = await FundCampaign.findById(campaignId);
         if (!campaign) {
             return res.status(404).json({ status: 'error', message: 'Kỳ thu quỹ không tồn tại' });

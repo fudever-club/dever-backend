@@ -7,15 +7,20 @@ const storage = multer.memoryStorage();
 
 export const uploadImageMiddleware = multer({
   storage,
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
   fileFilter: (_req: any, file: any, cb: any) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.originalname.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp|ico)$/i)) {
       cb(null, true);
     } else {
       cb(new Error('Chỉ chấp nhận file định dạng hình ảnh (JPEG, PNG, WebP, GIF, SVG)!'));
     }
   },
-}).single('file');
+}).fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'image', maxCount: 1 },
+  { name: 'avatar', maxCount: 1 },
+  { name: 'banner', maxCount: 1 },
+]);
 
 export const uploadDocumentMiddleware = multer({
   storage,
@@ -40,7 +45,10 @@ export const uploadDocumentMiddleware = multer({
       cb(new Error('Chỉ chấp nhận file tài liệu (PDF, ZIP, PPTX, DOCX, XLSX, TXT)!'));
     }
   },
-}).single('file');
+}).fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'document', maxCount: 1 },
+]);
 
 export const uploadAudioMiddleware = multer({
   storage,
@@ -55,11 +63,18 @@ export const uploadAudioMiddleware = multer({
       cb(new Error('Chỉ chấp nhận file định dạng âm thanh (MP3, M4A, WAV, OGG, AAC, FLAC)!'));
     }
   },
-}).single('file');
+}).fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'audio', maxCount: 1 },
+]);
 
 export const uploadAudio = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const file = (req as any).file;
+    const file =
+      (req as any).file ||
+      (req as any).files?.file?.[0] ||
+      (req as any).files?.audio?.[0];
+
     if (!file) {
       return res.status(400).json({
         status: 'error',
@@ -82,7 +97,13 @@ export const uploadAudio = async (req: Request, res: Response, next: NextFunctio
 
 export const uploadImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const file = (req as any).file;
+    const file =
+      (req as any).file ||
+      (req as any).files?.file?.[0] ||
+      (req as any).files?.image?.[0] ||
+      (req as any).files?.avatar?.[0] ||
+      (req as any).files?.banner?.[0];
+
     if (!file) {
       return res.status(400).json({
         status: 'error',
@@ -90,7 +111,7 @@ export const uploadImage = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const folder = req.body.folder || 'blog-images';
+    const folder = req.body.folder || 'media';
     const result = await uploadToStorage(file, folder);
 
     return res.status(200).json({
@@ -105,7 +126,11 @@ export const uploadImage = async (req: Request, res: Response, next: NextFunctio
 
 export const uploadDocument = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const file = (req as any).file;
+    const file =
+      (req as any).file ||
+      (req as any).files?.file?.[0] ||
+      (req as any).files?.document?.[0];
+
     if (!file) {
       return res.status(400).json({
         status: 'error',
