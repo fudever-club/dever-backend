@@ -130,6 +130,15 @@ export const uploadToStorage = async (
     console.error('[Storage] Cloudflare R2 upload failed, fallback to local storage:', err);
   }
 
+  // 3. Asynchronous Disaster Recovery Backup to ImgBB (Non-blocking)
+  const isImage = file.mimetype?.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(file.originalname);
+  const imgbbApiKey = process.env.IMGBB_API_KEY;
+  if (isImage && imgbbApiKey) {
+    backupToImgBB(file.buffer, cleanOriginalName, imgbbApiKey).catch((err) => {
+      console.warn('[Storage] ImgBB background backup error:', err?.message || err);
+    });
+  }
+
   // Generate public proxy URL served by backend
   const publicProxyUrl = `${config.apiServer}/api/v1/upload/file/${key}`;
 
@@ -140,6 +149,42 @@ export const uploadToStorage = async (
     mimetype: file.mimetype,
     originalName: file.originalname,
   };
+};
+
+/**
+ * Asynchronously backup image to ImgBB for off-site disaster recovery redundancy
+ */
+export const backupToImgBB = async (
+  buffer: Buffer,
+  name: string,
+  apiKey?: string
+): Promise<string | null> => {
+  const key = apiKey || process.env.IMGBB_API_KEY;
+  if (!key) return null;
+
+  try {
+    const base64Image = buffer.toString('base64');
+    const formData = new URLSearchParams();
+    formData.append('image', base64Image);
+    formData.append('name', name);
+
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data: any = await response.json();
+    if (data?.success && data?.data?.url) {
+      console.log(`[Storage] ImgBB disaster recovery backup created: ${data.data.url}`);
+      return data.data.url;
+    } else {
+      console.warn('[Storage] ImgBB backup response not successful:', data?.error?.message || data);
+      return null;
+    }
+  } catch (err: any) {
+    console.warn('[Storage] ImgBB disaster recovery backup error:', err?.message || err);
+    return null;
+  }
 };
 
 export const getFileFromStorage = async (key: string): Promise<FileDownloadStream | null> => {
