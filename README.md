@@ -116,20 +116,20 @@ CLIENT_URL=https://client.fudever.com
 ADMIN_URL=https://admin.fudever.com
 
 # Cloudflare R2 Storage (S3-Compatible)
-R2_ACCOUNT_ID=0cf4dda6c36698e80db232829cf2ecce
-R2_ACCESS_KEY_ID=ac51419c5e068e6665276b814f24dfdb
-R2_SECRET_ACCESS_KEY=1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_ACCESS_KEY_ID=your_r2_access_key_id
+R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
 R2_BUCKET_NAME=fu-dever-storage
-R2_ENDPOINT=https://0cf4dda6c36698e80db232829cf2ecce.r2.cloudflarestorage.com
-R2_PUBLIC_URL=https://0cf4dda6c36698e80db232829cf2ecce.r2.cloudflarestorage.com/fu-dever-storage
+R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+R2_PUBLIC_URL=https://<account_id>.r2.cloudflarestorage.com/fu-dever-storage
 
 # ImgBB Disaster Recovery Backup (Temporary 30-Day Rolling Buffer)
-IMGBB_API_KEY=28cd81fb0d57df8105ecd387cc23be60
+IMGBB_API_KEY=your_imgbb_api_key_here
 IMGBB_EXPIRATION_SECONDS=2592000
 
 # Telegram Automation Bridge (@Fudever_bot)
-TELEGRAM_BOT_TOKEN=8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc
-TELEGRAM_ADMIN_CHAT_ID=7465099987
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_ADMIN_CHAT_ID=your_telegram_chat_id
 TELEGRAM_NOTIFICATIONS_ENABLED=true
 ```
 

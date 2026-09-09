@@ -6,11 +6,11 @@ const { S3Client, PutObjectCommand, HeadObjectCommand } = require('@aws-sdk/clie
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const R2_CONFIG = {
-  endpoint: process.env.R2_ENDPOINT || 'https://0cf4dda6c36698e80db232829cf2ecce.r2.cloudflarestorage.com',
+  endpoint: process.env.R2_ENDPOINT || '',
   bucket: process.env.R2_BUCKET_NAME || 'fu-dever-storage',
-  accessKeyId: process.env.R2_ACCESS_KEY_ID || 'ac51419c5e068e6665276b814f24dfdb',
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be',
-  apiServer: 'https://dever-backend-production.up.railway.app',
+  accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+  apiServer: process.env.API_SERVER_URL || 'https://dever-backend-production.up.railway.app',
 };
 
 const s3 = new S3Client({

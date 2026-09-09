@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { processTelegramMessage, processTelegramCallbackQuery } from '../controllers/telegramWebhookController';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8654509084:AAH7GQSE7AE_O390qVMz14-rOP_eMDkepnc';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_ENABLED = process.env.TELEGRAM_NOTIFICATIONS_ENABLED !== 'false';
 
 let isPolling = false;

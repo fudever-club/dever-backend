@@ -24,13 +24,13 @@ const getStorageConfig = () => {
 
   const accessKeyId =
     process.env.R2_ACCESS_KEY_ID ||
-    (isR2 ? 'ac51419c5e068e6665276b814f24dfdb' : process.env.AWS_ACCESS_KEY_ID) ||
-    'ac51419c5e068e6665276b814f24dfdb';
+    (isR2 ? '' : process.env.AWS_ACCESS_KEY_ID) ||
+    '';
 
   const secretAccessKey =
     process.env.R2_SECRET_ACCESS_KEY ||
-    (isR2 ? '1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be' : process.env.AWS_SECRET_ACCESS_KEY) ||
-    '1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be';
+    (isR2 ? '' : process.env.AWS_SECRET_ACCESS_KEY) ||
+    '';
 
   const apiPort = process.env.PORT || process.env.APP_PORT || 5000;
   let apiServer = process.env.API_SERVER_URL;
@@ -132,7 +132,7 @@ export const uploadToStorage = async (
 
   // 3. Fire-and-forget temporary disaster recovery backup to ImgBB (0ms latency impact, purely temporary buffer)
   const isImage = file.mimetype?.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(file.originalname);
-  const imgbbApiKey = process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
+  const imgbbApiKey = process.env.IMGBB_API_KEY || '';
   if (isImage && imgbbApiKey) {
     setImmediate(() => {
       backupToImgBB(file.buffer, cleanOriginalName, imgbbApiKey).catch((err) => {
@@ -164,7 +164,7 @@ export const backupToImgBB = async (
   apiKey?: string,
   expirationSeconds: number = Number(process.env.IMGBB_EXPIRATION_SECONDS) || 2592000 // 30 days temporary buffer
 ): Promise<string | null> => {
-  const key = apiKey || process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
+  const key = apiKey || process.env.IMGBB_API_KEY || '';
   if (!key) return null;
 
   try {
