@@ -15,19 +15,21 @@ const getStorageConfig = () => {
       ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
       : 'https://0cf4dda6c36698e80db232829cf2ecce.r2.cloudflarestorage.com');
 
+  const isR2 = endpoint.includes('cloudflarestorage.com');
+
   const bucket =
     process.env.R2_BUCKET_NAME ||
-    process.env.AWS_S3_BUCKET ||
+    (isR2 ? 'fu-dever-storage' : process.env.AWS_S3_BUCKET) ||
     'fu-dever-storage';
 
   const accessKeyId =
     process.env.R2_ACCESS_KEY_ID ||
-    process.env.AWS_ACCESS_KEY_ID ||
+    (isR2 ? 'ac51419c5e068e6665276b814f24dfdb' : process.env.AWS_ACCESS_KEY_ID) ||
     'ac51419c5e068e6665276b814f24dfdb';
 
   const secretAccessKey =
     process.env.R2_SECRET_ACCESS_KEY ||
-    process.env.AWS_SECRET_ACCESS_KEY ||
+    (isR2 ? '1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be' : process.env.AWS_SECRET_ACCESS_KEY) ||
     '1744c1ff8af08b9a42a9566e3540dba846803612527e13a275e9a6821393b2be';
 
   const apiPort = process.env.PORT || process.env.APP_PORT || 5000;
@@ -123,8 +125,9 @@ export const uploadToStorage = async (
       ContentType: file.mimetype,
     });
     await s3.send(command);
+    console.log(`[Storage] Successfully uploaded to Cloudflare R2 [${config.bucket}]: ${key}`);
   } catch (err) {
-    console.warn('Cloudflare R2 upload fallback to local storage:', err);
+    console.error('[Storage] Cloudflare R2 upload failed, fallback to local storage:', err);
   }
 
   // Generate public proxy URL served by backend
