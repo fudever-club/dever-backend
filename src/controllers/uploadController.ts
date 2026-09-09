@@ -162,19 +162,31 @@ export const serveFile = async (req: Request, res: Response, next: NextFunction)
     const fileObj = await getFileFromStorage(rawKey);
     if (!fileObj) {
       if (rawKey.startsWith('avatar/') || rawKey.includes('avatar')) {
+        const ext = path.extname(rawKey).toLowerCase();
         const fallbackSvg = path.join(process.cwd(), 'public', 'images', 'avatar', 'avatar.svg');
         const fallbackJpg = path.join(process.cwd(), 'public', 'images', 'avatar', 'avatar.jpg');
-        if (fs.existsSync(fallbackSvg)) {
+
+        // If explicitly requesting an SVG, serve SVG
+        if (ext === '.svg' && fs.existsSync(fallbackSvg)) {
           res.setHeader('Content-Type', 'image/svg+xml');
           res.setHeader('Cache-Control', 'public, max-age=86400');
           return fs.createReadStream(fallbackSvg).pipe(res);
         }
+
+        // For all raster image formats (.jpg, .jpeg, .png, .webp), serve real JPEG binary
+        // to prevent Next.js image optimizer and browser image decoders from failing on SVG content
         if (fs.existsSync(fallbackJpg)) {
           res.setHeader('Content-Type', 'image/jpeg');
           res.setHeader('Cache-Control', 'public, max-age=86400');
           return fs.createReadStream(fallbackJpg).pipe(res);
         }
-        return res.redirect(302, 'https://client.fudever.com/images/avatar/avatar.svg');
+
+        if (fs.existsSync(fallbackSvg)) {
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return fs.createReadStream(fallbackSvg).pipe(res);
+        }
+        return res.redirect(302, 'https://client.fudever.com/images/avatar/avatar.jpg');
       }
       return res.status(404).json({ status: 'error', message: 'Không tìm thấy file tài liệu trên hệ thống lưu trữ' });
     }
