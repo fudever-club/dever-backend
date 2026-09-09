@@ -132,7 +132,7 @@ export const uploadToStorage = async (
 
   // 3. Asynchronous Disaster Recovery Backup to ImgBB (Non-blocking)
   const isImage = file.mimetype?.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(file.originalname);
-  const imgbbApiKey = process.env.IMGBB_API_KEY;
+  const imgbbApiKey = process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
   if (isImage && imgbbApiKey) {
     backupToImgBB(file.buffer, cleanOriginalName, imgbbApiKey).catch((err) => {
       console.warn('[Storage] ImgBB background backup error:', err?.message || err);
@@ -159,17 +159,21 @@ export const backupToImgBB = async (
   name: string,
   apiKey?: string
 ): Promise<string | null> => {
-  const key = apiKey || process.env.IMGBB_API_KEY;
+  const key = apiKey || process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
   if (!key) return null;
 
   try {
-    const base64Image = buffer.toString('base64');
-    const formData = new URLSearchParams();
-    formData.append('image', base64Image);
+    const filename = name.includes('.') ? name : `${name}.jpg`;
+    const blob = new Blob([buffer]);
+    const formData = new FormData();
+    formData.append('image', blob, filename);
     formData.append('name', name);
 
     const response = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, {
       method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
       body: formData,
     });
 
