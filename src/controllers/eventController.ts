@@ -6,6 +6,7 @@ import { EventRegistration } from '../models/EventRegistrationModel';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
 import { sendTelegramMessage } from '../services/telegramService';
+import { invalidateCache } from '../services/cacheService';
 
 export const getAllEvents = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -49,6 +50,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
             await Event.updateMany({}, { isFeatured: false });
         }
         const event = await Event.create(payload);
+        invalidateCache('events');
         res.status(201).json({
             status: 'success',
             data: event,
@@ -78,6 +80,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
         if (!event) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy sự kiện' });
         }
+        invalidateCache('events');
         res.status(200).json({
             status: 'success',
             data: event,
@@ -91,6 +94,7 @@ export const deleteEvent = async (req: Request, res: Response, next: NextFunctio
     try {
         await Event.findByIdAndDelete(req.params.id);
         await EventRegistration.deleteMany({ eventId: req.params.id });
+        invalidateCache('events');
         res.status(200).json({
             status: 'success',
             message: 'Event and related registrations deleted successfully',

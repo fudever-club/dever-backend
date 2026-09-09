@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Resource } from '../models/ResourceModel';
 import { getFileFromStorage } from '../services/storageService';
+import { invalidateCache } from '../services/cacheService';
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -138,6 +139,7 @@ export const createResource = async (req: Request, res: Response, next: NextFunc
             resource.fileUrl = `${req.protocol}://${req.get('host')}/api/v1/resources/${resource._id}/download`;
             await resource.save();
         }
+        invalidateCache('resources');
         return res.status(201).json({
             status: 'success',
             data: resource.toObject({ versionKey: false }),
@@ -196,6 +198,7 @@ export const downloadResource = async (req: Request, res: Response, next: NextFu
 export const deleteResource = async (req: Request, res: Response, next: NextFunction) => {
     try {
         await Resource.findByIdAndDelete(req.params.id);
+        invalidateCache('resources');
         return res.status(200).json({
             status: 'success',
             message: 'Resource deleted successfully',
@@ -216,6 +219,7 @@ export const toggleResourceFeatured = async (req: Request, res: Response, next: 
 
         resource.isFeatured = typeof isFeatured === 'boolean' ? isFeatured : !resource.isFeatured;
         await resource.save();
+        invalidateCache('resources');
 
         return res.status(200).json({
             status: 'success',
@@ -243,6 +247,7 @@ export const updateResource = async (req: Request, res: Response, next: NextFunc
         if (!resource) {
             return res.status(404).json({ status: 'error', message: 'Tài liệu không tồn tại' });
         }
+        invalidateCache('resources');
         return res.status(200).json({
             status: 'success',
             message: 'Cập nhật tài liệu thành công',

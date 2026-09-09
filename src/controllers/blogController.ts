@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Blog } from '../models/BlogModel';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
+import { invalidateCache } from '../services/cacheService';
 
 const escapeRegExp = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
@@ -184,6 +185,8 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
             }).catch((e) => console.warn('[Blog Notification Trigger Error]:', e));
         }
 
+        invalidateCache('blogs');
+
         res.status(201).json({
             status: 'success',
             data: blog,
@@ -236,6 +239,7 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
         }
 
         const updatedBlog = await Blog.findByIdAndUpdate(req.params.id, updates, { new: true });
+        invalidateCache('blogs');
         return res.status(200).json({
             status: 'success',
             data: updatedBlog,
@@ -255,6 +259,7 @@ export const toggleFeaturedBlog = async (req: Request, res: Response, next: Next
         const newFeatured = !blog.isFeatured;
         blog.isFeatured = newFeatured;
         await blog.save();
+        invalidateCache('blogs');
 
         return res.status(200).json({
             status: 'success',
@@ -400,6 +405,8 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
             }
         }
 
+        invalidateCache('blogs');
+
         res.status(200).json({
             status: 'success',
             message: `Bài viết đã được cập nhật trạng thái: ${status}`,
@@ -436,6 +443,7 @@ export const likeBlog = async (req: Request, res: Response, next: NextFunction) 
         }
 
         await blog.save();
+        invalidateCache('blogs');
         res.status(200).json({
             status: 'success',
             data: {
@@ -464,6 +472,7 @@ export const deleteBlog = async (req: Request, res: Response, next: NextFunction
         }
 
         await Blog.findByIdAndDelete(req.params.id);
+        invalidateCache('blogs');
         res.status(200).json({
             status: 'success',
             message: 'Blog deleted successfully',

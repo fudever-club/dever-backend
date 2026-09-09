@@ -13,14 +13,15 @@ import {
     likeBlog,
 } from '../controllers/blogController';
 import { requireAdmin, requireAuth, optionalAuth } from '../middlewares/auth';
+import { cacheRoute } from '../services/cacheService';
 
 const Router = express.Router();
 
-Router.route('/').get(getAllBlogs).post(requireAuth, createBlog);
+Router.route('/').get(cacheRoute(60, 'blogs'), getAllBlogs).post(requireAuth, createBlog);
 Router.route('/me').get(requireAuth, getMyBlogs);
 Router.route('/admin/all').get(requireAuth, requireAdmin, getAllBlogsForAdmin);
 Router.route('/admin/review-queue').get(requireAuth, requireAdmin, getReviewQueue);
-Router.route('/slug/:slug').get(optionalAuth, getBlogBySlug);
+Router.route('/slug/:slug').get(optionalAuth, cacheRoute(60, 'blogs'), getBlogBySlug);
 Router.route('/:id/review').patch(requireAuth, requireAdmin, reviewBlog);
 Router.route('/:id/toggle-featured').patch(requireAuth, requireAdmin, toggleFeaturedBlog);
 Router.route('/:id/like').put(optionalAuth, likeBlog);

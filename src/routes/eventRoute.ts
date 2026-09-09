@@ -11,18 +11,19 @@ import {
     checkInAttendee,
 } from '../controllers/eventController';
 import { requireAdmin, requireAuth, optionalAuth } from '../middlewares/auth';
+import { cacheRoute } from '../services/cacheService';
 
 const Router = express.Router();
 
 Router.route('/')
-    .get(getAllEvents)
+    .get(cacheRoute(120, 'events'), getAllEvents)
     .post(requireAuth, requireAdmin, createEvent);
 
 Router.route('/my-tickets').get(requireAuth, getMyEventTickets);
 Router.route('/checkin').post(requireAuth, requireAdmin, checkInAttendee);
 
 Router.route('/:id')
-    .get(getEventById)
+    .get(cacheRoute(120, 'events'), getEventById)
     .patch(requireAuth, requireAdmin, updateEvent)
     .put(requireAuth, requireAdmin, updateEvent)
     .delete(requireAuth, requireAdmin, deleteEvent);

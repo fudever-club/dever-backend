@@ -5,6 +5,7 @@ import { Leaderboard } from '../models/LeaderboardModel';
 import { User } from '../models/UserModel';
 import { toPublicProfileKey } from '../Utils/userDto';
 import { getJwtSecret } from '../config/auth';
+import { invalidateCache } from '../services/cacheService';
 const axios = require('axios');
 
 export const getUserAcProblems = async (username: string) => {
@@ -121,6 +122,8 @@ export const subcribeLeetcode = async (req: Request, res: Response, next: NextFu
         // Also update User document
         await User.findByIdAndUpdate(userId, { leetcodeUsername: cleanUsername });
 
+        invalidateCache('leetcode');
+
         res.status(200).json({
             status: 'success',
             data: {
@@ -180,6 +183,8 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
         });
 
         await Promise.all(updatePromises.filter(Boolean));
+
+        invalidateCache('leetcode');
 
         res.status(200).json({
             status: 'success',
