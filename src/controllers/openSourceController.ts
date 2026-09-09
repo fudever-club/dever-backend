@@ -116,7 +116,7 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
             type: 'system_alert',
             title: 'Dự án Open Source mới gửi duyệt 💻',
             message: `Thành viên ${authorName} vừa gửi dự án "${title}" lên hàng đợi duyệt.`,
-            link: '/vi/content-management',
+            link: '/vi/community-content',
             meta: { project },
             sendTelegram: true,
         }).catch(() => {});
@@ -129,7 +129,7 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
 📂 <b>GitHub:</b> ${githubUrl}
 🏷️ <b>Chuyên mục:</b> ${category || 'Open Source'}
 
-👉 <a href="${process.env.ADMIN_URL || 'https://admin.fudever.com'}/vi/content-management"><b>XEM VÀ DUYỆT DỰ ÁN TRÊN ADMIN DASHBOARD</b></a>
+👉 <a href="${process.env.ADMIN_URL || 'https://admin.fudever.com'}/vi/community-content"><b>XEM VÀ DUYỆT DỰ ÁN TRÊN ADMIN DASHBOARD</b></a>
 `.trim();
         sendTelegramMessage(undefined, telegramMsg).catch(() => {});
 
@@ -168,20 +168,26 @@ export const updateOpenSourceProject = async (req: Request, res: Response, next:
 
         // If newly published and has authorId, award +150 EXP and unlock core_contributor badge
         if (isPublished === true && oldProject.isPublished === false && oldProject.authorId) {
-            await User.findByIdAndUpdate(oldProject.authorId, {
-                $inc: { exp: 150 },
-                $addToSet: { unlockedBadges: { badgeId: 'core_contributor', unlockedAt: new Date() } },
-            });
+            const userAuthor = await User.findById(oldProject.authorId);
+            if (userAuthor) {
+                userAuthor.exp = (userAuthor.exp || 0) + 150;
+                userAuthor.unlockedBadges = userAuthor.unlockedBadges || [];
+                const alreadyHasBadge = userAuthor.unlockedBadges.some((b: any) => b.badgeId === 'core_contributor');
+                if (!alreadyHasBadge) {
+                    userAuthor.unlockedBadges.push({ badgeId: 'core_contributor', unlockedAt: new Date() });
+                }
+                await userAuthor.save();
 
-            createNotification({
-                recipientId: oldProject.authorId.toString(),
-                type: 'badge_unlocked',
-                title: 'Dự án của bạn đã được xuất bản! 🌟',
-                message: `Dự án "${oldProject.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
-                link: '/discover',
-                meta: { project, milestone: { badgeTitle: 'Core Contributor' } },
-                sendTelegram: true,
-            }).catch(() => {});
+                createNotification({
+                    recipientId: oldProject.authorId.toString(),
+                    type: 'badge_unlocked',
+                    title: 'Dự án của bạn đã được xuất bản! 🌟',
+                    message: `Dự án "${oldProject.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
+                    link: '/discover',
+                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: userAuthor },
+                    sendTelegram: true,
+                }).catch(() => {});
+            }
         }
 
         return res.status(200).json({ status: 'success', data: project });
@@ -230,20 +236,26 @@ export const approveOpenSourceProject = async (req: Request, res: Response, next
         await project.save();
 
         if (!wasPublished && project.authorId) {
-            await User.findByIdAndUpdate(project.authorId, {
-                $inc: { exp: 150 },
-                $addToSet: { unlockedBadges: { badgeId: 'core_contributor', unlockedAt: new Date() } },
-            });
+            const author = await User.findById(project.authorId);
+            if (author) {
+                author.exp = (author.exp || 0) + 150;
+                author.unlockedBadges = author.unlockedBadges || [];
+                const alreadyHasBadge = author.unlockedBadges.some((b: any) => b.badgeId === 'core_contributor');
+                if (!alreadyHasBadge) {
+                    author.unlockedBadges.push({ badgeId: 'core_contributor', unlockedAt: new Date() });
+                }
+                await author.save();
 
-            createNotification({
-                recipientId: project.authorId.toString(),
-                type: 'badge_unlocked',
-                title: 'Dự án của bạn đã được xuất bản! 🌟',
-                message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
-                link: '/discover',
-                meta: { project, milestone: { badgeTitle: 'Core Contributor' } },
-                sendTelegram: true,
-            }).catch(() => {});
+                createNotification({
+                    recipientId: project.authorId.toString(),
+                    type: 'badge_unlocked',
+                    title: 'Dự án của bạn đã được xuất bản! 🌟',
+                    message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
+                    link: '/discover',
+                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: author },
+                    sendTelegram: true,
+                }).catch(() => {});
+            }
         }
 
         return res.status(200).json({
