@@ -1,0 +1,20 @@
+<svg width="960" height="960" viewBox="0 0 960 960" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgSlate" x1="0" y1="0" x2="960" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#E2E8F0" />
+    </linearGradient>
+    <linearGradient id="iconSlate" x1="480" y1="200" x2="480" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#64748B" />
+    </linearGradient>
+  </defs>
+
+  <rect width="960" height="960" fill="url(#bgSlate)" />
+
+  <!-- Head -->
+  <circle cx="480" cy="380" r="160" fill="url(#iconSlate)" />
+
+  <!-- Shoulders with smooth natural slope designed for circular avatars -->
+  <path d="M160 960 C160 720 300 590 480 590 C660 590 800 720 800 960 Z" fill="url(#iconSlate)" />
+</svg>

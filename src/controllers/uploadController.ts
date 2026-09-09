@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import { uploadToStorage, getFileFromStorage } from '../services/storageService';
 
@@ -160,6 +161,21 @@ export const serveFile = async (req: Request, res: Response, next: NextFunction)
 
     const fileObj = await getFileFromStorage(rawKey);
     if (!fileObj) {
+      if (rawKey.startsWith('avatar/') || rawKey.includes('avatar')) {
+        const fallbackSvg = path.join(process.cwd(), 'public', 'images', 'avatar', 'avatar.svg');
+        const fallbackJpg = path.join(process.cwd(), 'public', 'images', 'avatar', 'avatar.jpg');
+        if (fs.existsSync(fallbackSvg)) {
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return fs.createReadStream(fallbackSvg).pipe(res);
+        }
+        if (fs.existsSync(fallbackJpg)) {
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return fs.createReadStream(fallbackJpg).pipe(res);
+        }
+        return res.redirect(302, 'https://client.fudever.com/images/avatar/avatar.svg');
+      }
       return res.status(404).json({ status: 'error', message: 'Không tìm thấy file tài liệu trên hệ thống lưu trữ' });
     }
 
