@@ -130,12 +130,14 @@ export const uploadToStorage = async (
     console.error('[Storage] Cloudflare R2 upload failed, fallback to local storage:', err);
   }
 
-  // 3. Asynchronous Disaster Recovery Backup to ImgBB (Non-blocking)
+  // 3. Fire-and-forget temporary disaster recovery backup to ImgBB (0ms latency impact, purely temporary buffer)
   const isImage = file.mimetype?.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(file.originalname);
   const imgbbApiKey = process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
   if (isImage && imgbbApiKey) {
-    backupToImgBB(file.buffer, cleanOriginalName, imgbbApiKey).catch((err) => {
-      console.warn('[Storage] ImgBB background backup error:', err?.message || err);
+    setImmediate(() => {
+      backupToImgBB(file.buffer, cleanOriginalName, imgbbApiKey).catch((err) => {
+        console.warn('[Storage] ImgBB background backup error:', err?.message || err);
+      });
     });
   }
 
@@ -152,12 +154,15 @@ export const uploadToStorage = async (
 };
 
 /**
- * Asynchronously backup image to ImgBB for off-site disaster recovery redundancy
+ * Asynchronously backup image to ImgBB for off-site temporary disaster recovery redundancy.
+ * Automatically configured with temporary expiration (default: 30 days = 2,592,000s) to keep ImgBB
+ * purely as a rolling short-term buffer without consuming account storage.
  */
 export const backupToImgBB = async (
   buffer: Buffer,
   name: string,
-  apiKey?: string
+  apiKey?: string,
+  expirationSeconds: number = Number(process.env.IMGBB_EXPIRATION_SECONDS) || 2592000 // 30 days temporary buffer
 ): Promise<string | null> => {
   const key = apiKey || process.env.IMGBB_API_KEY || '28cd81fb0d57df8105ecd387cc23be60';
   if (!key) return null;
@@ -169,7 +174,9 @@ export const backupToImgBB = async (
     formData.append('image', blob, filename);
     formData.append('name', name);
 
-    const response = await fetch(`https://api.imgbb.com/1/upload?key=${key}`, {
+    const uploadUrl = `https://api.imgbb.com/1/upload?expiration=${expirationSeconds}&key=${key}`;
+
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -179,7 +186,7 @@ export const backupToImgBB = async (
 
     const data: any = await response.json();
     if (data?.success && data?.data?.url) {
-      console.log(`[Storage] ImgBB disaster recovery backup created: ${data.data.url}`);
+      console.log(`[Storage] Temporary ImgBB backup created (expires in ${expirationSeconds}s): ${data.data.url}`);
       return data.data.url;
     } else {
       console.warn('[Storage] ImgBB backup response not successful:', data?.error?.message || data);
