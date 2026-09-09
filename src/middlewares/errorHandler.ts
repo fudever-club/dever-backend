@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { observabilityService } from '../services/observabilityService';
 
 export interface ErrorType {
     statusCode?: number;
@@ -17,6 +18,20 @@ exports.errorHandler = (err: any, req: Request, res: Response, next: NextFunctio
 
     err.statusCode = res.statusCode = err.status || 500;
     console.error('[Error Handler]:', err);
+
+    // Trigger Telegram Alert for Server 500s
+    if (err.statusCode >= 500) {
+        observabilityService.reportCriticalError({
+            source: 'backend',
+            message: err.message || 'Internal Server Error',
+            stack: err.stack,
+            route: req.originalUrl,
+            method: req.method,
+            statusCode: err.statusCode,
+            user: res.locals?.auth?.email || res.locals?.auth?.userId?.toString(),
+            ip: req.ip || req.headers['x-forwarded-for']?.toString(),
+        }).catch((e) => console.warn('[Error Handler Alert Failed]:', e));
+    }
 
     if (err.code === 11000) {
         err.statusCode = 400;

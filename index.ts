@@ -26,6 +26,8 @@ const openSourceRoute = require('./src/routes/openSourceRoute');
 const gamificationRoute = require('./src/routes/gamificationRoute');
 const notificationRoute = require('./src/routes/notificationRoute');
 const fundRoute = require('./src/routes/fundRoute');
+const telegramRoute = require('./src/routes/telegramRoute');
+import { observabilityService } from './src/services/observabilityService';
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
 const { connectDB } = require('./src/config/db');
@@ -158,6 +160,8 @@ app.use('/api/v1/funds', fundRoute);
 app.use('/api/v1/fund', fundRoute);
 app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/search', searchRoute);
+app.use('/api/v1/telegram', telegramRoute);
+app.use('/api/v1/telemetry', telegramRoute);
 
 // Register documentation before the catch-all 404 handler. Previously this
 // function ran inside the listen callback, after the wildcard route had
@@ -176,10 +180,20 @@ app.use(errorHandler);
 // Global process resilience against unhandled promises and exceptions
 process.on('unhandledRejection', (reason: any) => {
     console.error('[Process] Unhandled Rejection:', reason);
+    observabilityService.reportCriticalError({
+        source: 'process',
+        message: `Unhandled Rejection: ${reason?.message || String(reason)}`,
+        stack: reason?.stack,
+    }).catch(() => {});
 });
 
 process.on('uncaughtException', (error: Error) => {
     console.error('[Process] Uncaught Exception:', error);
+    observabilityService.reportCriticalError({
+        source: 'process',
+        message: `Uncaught Exception: ${error?.message || String(error)}`,
+        stack: error?.stack,
+    }).catch(() => {});
 });
 
 import { socketServer } from './src/socket';

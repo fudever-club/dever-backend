@@ -72,8 +72,10 @@ export class MemoryCacheManager {
     }
   }
 
-  public clear(): void {
+  public clear(): number {
+    const count = this.cache.size;
     this.cache.clear();
+    return count;
   }
 
   public stats() {
@@ -82,6 +84,10 @@ export class MemoryCacheManager {
       hits: this.hits,
       misses: this.misses,
     };
+  }
+
+  public getStats() {
+    return this.stats();
   }
 }
 
