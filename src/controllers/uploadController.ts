@@ -211,13 +211,18 @@ export const serveFile = async (req: Request, res: Response, next: NextFunction)
       ? rawContentType
       : (inferredMime || rawContentType || 'application/octet-stream');
 
+    const isSvg = contentType === 'image/svg+xml';
     const isMediaOrDocInline =
-      contentType.startsWith('image/') ||
-      contentType.startsWith('audio/') ||
-      contentType === 'application/pdf';
+      !isSvg &&
+      (contentType.startsWith('image/') ||
+        contentType.startsWith('audio/') ||
+        contentType === 'application/pdf');
+    // User-uploaded SVG is never rendered inline: script inside SVG would run
+    // in the API origin when opened directly. Force download instead.
     const disposition = isMediaOrDocInline ? 'inline' : 'attachment';
 
     res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(fileObj.filename)}"`);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     if (fileObj.contentLength) {

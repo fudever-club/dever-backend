@@ -102,7 +102,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
             return res.status(400).json({ status: 'error', message: 'New password must be different' });
         }
 
-        const user = await User.findById(userId);
+        const user = await User.findById(userId).select('+password');
         if (!user || !bcrypt.compareSync(oldPassword, user.password)) {
             return res.status(400).json({ status: 'error', message: 'Old password is incorrect' });
         }

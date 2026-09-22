@@ -127,20 +127,51 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const skip = (page - 1) * limit;
         const filter: Record<string, unknown> = {};
         const admin = isAdmin(res);
+        // Allowlisted scalar filter keys only — blocks NoSQL operator injection
+        // (e.g. {"isAdmin": true}, {"email": {"$ne": null}}, {"$where": ...}).
+        const ALLOWED_FILTER_KEYS = [
+            'firstname',
+            'lastname',
+            'nickname',
+            'gen',
+            'kGeneration',
+            'positionId',
+            'majorId',
+            'departments',
+            'isLeader',
+            'isExcellent',
+        ];
+        const ADMIN_ONLY_FILTER_KEYS = ['email', 'phone', 'MSSV'];
 
         if (req.query.filter) {
             try {
                 const requested = JSON.parse(req.query.filter as string) as Record<string, unknown>;
                 for (const [key, value] of Object.entries(requested)) {
-                    if (value !== '') {
-                        filter[key] = value;
+                    if (key.startsWith('$') || key.includes('.')) {
+                        continue;
                     }
+                    const keyAllowed =
+                        ALLOWED_FILTER_KEYS.includes(key) ||
+                        (admin && ADMIN_ONLY_FILTER_KEYS.includes(key));
+                    if (!keyAllowed) {
+                        continue;
+                    }
+                    if (value === '' || value === null || value === undefined) {
+                        continue;
+                    }
+                    // Reject objects/arrays — operators hide there.
+                    if (typeof value === 'object') {
+                        continue;
+                    }
+                    filter[key] = value;
                 }
                 if (filter.departments && typeof filter.departments === 'string') {
+                    const ids = filter.departments.split(',').map((id) => id.trim()).filter(Boolean);
+                    if (!ids.every((id) => mongoose.Types.ObjectId.isValid(id))) {
+                        return res.status(400).json({ status: 'fail', message: 'Invalid departments filter' });
+                    }
                     filter.departments = {
-                        $in: filter.departments
-                            .split(',')
-                            .map((id) => new mongoose.Types.ObjectId(id.trim())),
+                        $in: ids.map((id) => new mongoose.Types.ObjectId(id)),
                     };
                 }
                 if (filter.isLeader !== undefined) {
@@ -225,13 +256,20 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
                 .populate('socials.socialId');
         }
 
-        // 3. Try finding by MongoDB ObjectId
+        // 3. Raw MongoDB ObjectId lookup is restricted to the owner/admin so the
+        // opaque profileKey remains the only public locator.
         if (!user && mongoose.Types.ObjectId.isValid(identifier)) {
-            user = await User.findById(identifier)
+            const candidate = await User.findById(identifier)
                 .populate('majorId')
                 .populate('positionId')
                 .populate('departments')
                 .populate('socials.socialId');
+            if (candidate) {
+                const requesterId = res.locals.auth?.userId;
+                if (requesterId && (requesterId === candidate._id.toString() || isAdmin(res))) {
+                    user = candidate;
+                }
+            }
         }
 
         if (!user) {
@@ -269,7 +307,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
         if (typeof newPassword !== 'string' || newPassword.length < 6) {
             return res.status(400).json({ status: 'error', message: 'New password must be at least 6 characters' });
         }
-        const user = await User.findById(userId);
+        const user = await User.findById(userId).select('+password');
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
         }

@@ -98,7 +98,7 @@ app.use(
             ) {
                 return callback(null, true);
             }
-            return callback(null, true);
+            return callback(null, false);
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -122,12 +122,6 @@ app.get('/health', (_req, res) => {
 app.get('/ready', (_req, res) => {
     const isReady = mongoose.connection.readyState === 1;
     res.status(isReady ? 200 : 503).json({ status: isReady ? 'ready' : 'not_ready' });
-});
-
-app.post('/api/v1/check-ip', (req, res) => {
-    console.log(req.body);
-
-    res.json(req.body);
 });
 
 app.use('/', authRoute);

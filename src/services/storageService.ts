@@ -201,6 +201,10 @@ export const backupToImgBB = async (
 export const getFileFromStorage = async (key: string): Promise<FileDownloadStream | null> => {
   const config = getStorageConfig();
   const normalizedKey = key.replace(/^\/+/, '');
+  // Block path traversal — the local fallback below joins this key onto a directory.
+  if (normalizedKey.split('/').includes('..') || path.isAbsolute(normalizedKey)) {
+    return null;
+  }
   const filename = normalizedKey.split('/').pop() || 'document.pdf';
 
   // 1. Try fetching from Cloudflare R2 / S3
@@ -247,6 +251,10 @@ export const deleteFromStorage = async (key: string): Promise<boolean> => {
   try {
     const config = getStorageConfig();
     const normalizedKey = key.replace(/^\/+/, '');
+    // Block path traversal — the local delete below joins this key onto a directory.
+    if (normalizedKey.split('/').includes('..') || path.isAbsolute(normalizedKey)) {
+      return false;
+    }
 
     // 1. Delete from S3/R2
     try {

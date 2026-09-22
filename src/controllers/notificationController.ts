@@ -66,8 +66,17 @@ export const markNotificationAsRead = async (req: Request, res: Response, next: 
             return res.status(400).json({ status: 'error', message: 'Invalid notification ID' });
         }
 
-        const notification = await Notification.findByIdAndUpdate(
-            id,
+        const isAdmin = Boolean(res.locals.auth?.isAdmin);
+        const orConditions: any[] = [
+            { recipientId: new mongoose.Types.ObjectId(userId) },
+            { recipientRole: 'all' },
+        ];
+        if (isAdmin) {
+            orConditions.push({ recipientRole: 'admin' });
+        }
+
+        const notification = await Notification.findOneAndUpdate(
+            { _id: id, $or: orConditions },
             { isRead: true },
             { new: true }
         );

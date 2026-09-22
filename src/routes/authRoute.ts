@@ -1,6 +1,7 @@
 import express from 'express';
 
 import { login, welcome } from '../controllers/authController';
+import { loginLimiter } from '../middlewares/rateLimit';
 
 const Router = express.Router();
 
@@ -49,6 +50,6 @@ const Router = express.Router();
  *                         example: Leanne Graham
  */
 Router.route('/').get(welcome);
-Router.route('/login').post(login);
+Router.route('/login').post(loginLimiter, login);
 
 module.exports = Router;

@@ -92,7 +92,7 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
             return res.status(401).json({ status: 'error', message: 'Yêu cầu đăng nhập' });
         }
 
-        const { campaignId, proofImageUrl, transactionCode, note, amount } = req.body;
+        const { campaignId, proofImageUrl, transactionCode, note } = req.body;
 
         if (!campaignId || !proofImageUrl) {
             return res.status(400).json({
@@ -118,13 +118,15 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
         const userName = user ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.nickname || 'Thành viên DEVER' : 'Thành viên';
         const userMSSV = user?.MSSV || 'N/A';
 
+        // The payable amount is always the campaign's — never trust the client body.
+        const payableAmount = campaign.amount;
         // Check if there is already an existing payment for this campaign
         let payment = await FundPayment.findOne({ campaignId, userId });
         if (payment) {
             payment.proofImageUrl = proofImageUrl;
             payment.transactionCode = transactionCode || payment.transactionCode;
             payment.note = note || payment.note;
-            payment.amount = amount || campaign.amount;
+            payment.amount = payableAmount;
             payment.status = 'pending';
             payment.reviewNotes = '';
             await payment.save();
@@ -132,7 +134,7 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
             payment = await FundPayment.create({
                 campaignId,
                 userId,
-                amount: amount || campaign.amount,
+                amount: payableAmount,
                 proofImageUrl,
                 transactionCode: transactionCode || '',
                 note: note || '',
@@ -141,7 +143,7 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
         }
 
         // Send Telegram notification to Admin
-        const formattedAmount = (amount || campaign.amount).toLocaleString('vi-VN') + ' đ';
+        const formattedAmount = payableAmount.toLocaleString('vi-VN') + ' đ';
         const adminUrl = process.env.ADMIN_URL || 'https://admin.fudever.com';
         const telegramMsg = `
 💰 <b>[FU-DEVER QUỸ CLB] CÓ THÀNH VIÊN NỘP MINH CHỨNG ĐÓNG QUỸ!</b>
@@ -251,7 +253,43 @@ export const createAdminCampaign = async (req: Request, res: Response, next: Nex
 export const updateAdminCampaign = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const updated = await FundCampaign.findByIdAndUpdate(id, req.body, { new: true });
+        // Whitelist updatable fields — never mass-assign req.body (blocks _id/createdBy injection).
+        const ALLOWED_CAMPAIGN_FIELDS = [
+            'title',
+            'description',
+            'amount',
+            'startDate',
+            'deadline',
+            'semester',
+            'status',
+            'targetTotalAmount',
+        ];
+        const ALLOWED_BANK_FIELDS = [
+            'bankName',
+            'bankCode',
+            'accountNumber',
+            'accountHolder',
+            'transferSyntaxTemplate',
+            'qrTemplateUrl',
+            'customQrUrl',
+        ];
+        const payload: Record<string, unknown> = {};
+        for (const key of ALLOWED_CAMPAIGN_FIELDS) {
+            if ((req.body || {})[key] !== undefined) {
+                payload[key] = (req.body || {})[key];
+            }
+        }
+        const bankInfo = (req.body || {}).bankInfo;
+        if (bankInfo && typeof bankInfo === 'object' && !Array.isArray(bankInfo)) {
+            const bankPayload: Record<string, unknown> = {};
+            for (const key of ALLOWED_BANK_FIELDS) {
+                if ((bankInfo as Record<string, unknown>)[key] !== undefined) {
+                    bankPayload[key] = (bankInfo as Record<string, unknown>)[key];
+                }
+            }
+            payload.bankInfo = bankPayload;
+        }
+        const updated = await FundCampaign.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
         if (!updated) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy kỳ thu quỹ' });
         }

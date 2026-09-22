@@ -332,6 +332,15 @@ ${originalText}
  */
 export const handleTelegramWebhook = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // Verify Telegram secret token when configured (set via setWebhook secret_token).
+        // Skipped only when TELEGRAM_WEBHOOK_SECRET is unset to preserve existing deploys.
+        const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+        if (expectedSecret) {
+            const provided = req.get('X-Telegram-Bot-Api-Secret-Token');
+            if (provided !== expectedSecret) {
+                return res.status(401).json({ ok: false });
+            }
+        }
         if (req.body?.callback_query) {
             await processTelegramCallbackQuery(req.body.callback_query);
             return res.status(200).json({ ok: true });

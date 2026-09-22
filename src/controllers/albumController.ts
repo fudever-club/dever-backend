@@ -89,7 +89,16 @@ export const editAlbumById = async (req: Request, res: Response, next: NextFunct
     try {
         const { id } = req.params;
 
-        const album = await Album.findByIdAndUpdate(id, req.body, {
+        // Whitelist updatable fields — never mass-assign req.body (blocks _id/slug injection).
+        const ALLOWED_ALBUM_FIELDS = ['name', 'description', 'imageList'];
+        const payload: Record<string, unknown> = {};
+        for (const key of ALLOWED_ALBUM_FIELDS) {
+            if ((req.body || {})[key] !== undefined) {
+                payload[key] = (req.body || {})[key];
+            }
+        }
+
+        const album = await Album.findByIdAndUpdate(id, payload, {
             new: true,
             runValidators: true,
         });

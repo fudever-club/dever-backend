@@ -64,7 +64,6 @@ export const toPublicUserDto = (user: any) => {
     const source = toPlainObject(user);
     const visibility = source?.profileVisibility || DEFAULT_PROFILE_VISIBILITY;
     const result: Record<string, unknown> = {
-        _id: source?._id?.toString() || null,
         profileKey: toPublicProfileKey(source),
         firstname: source?.firstname || null,
         lastname: source?.lastname || null,

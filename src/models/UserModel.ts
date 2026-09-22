@@ -18,6 +18,9 @@ const userSchema = mongoose.Schema(
             minLength: [6, 'Password must be at least 6 characters'],
             trim: true,
             default: null,
+            // Never returned by default — readers that verify credentials
+            // must opt in with .select('+password').
+            select: false,
         },
         description: {
             type: String,

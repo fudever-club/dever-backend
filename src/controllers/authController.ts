@@ -24,7 +24,9 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         const inputEmail = req.body.email ? req.body.email.trim().toLowerCase() : '';
         const password = typeof req.body.password === 'string' ? req.body.password : '';
         const safeEmail = escapeRegExp(inputEmail);
-        const user = await User.findOne({ email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } }).populate('positionId');
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${safeEmail}$`, 'i') } })
+            .select('+password')
+            .populate('positionId');
         if (!user || !password || !bcrypt.compareSync(password, user.password)) {
             const err: ErrorType = new Error('Email hoặc Mật khẩu không chính xác');
             err.status = 400;

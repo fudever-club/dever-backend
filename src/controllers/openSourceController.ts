@@ -1,8 +1,14 @@
 import { NextFunction, Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { OpenSourceProject } from '../models/OpenSourceProjectModel';
 import { User } from '../models/UserModel';
+import { toPublicProfileKey } from '../Utils/userDto';
 import { createNotification } from '../services/notificationService';
 import { sendTelegramMessage, notifyAdminNewOpenSourceSubmission } from '../services/telegramService';
+
+// Stored URLs render as anchors — only http(s), otherwise stored XSS/phishing.
+const isSafeHttpUrl = (value: unknown): value is string =>
+    typeof value === 'string' && /^https?:\/\//i.test(value.trim());
 
 const INITIAL_PROJECTS = [
     {
@@ -40,8 +46,17 @@ const INITIAL_PROJECTS = [
 export const listOpenSourceProjects = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const filter: any = { isPublished: true };
-        if (req.query.authorId) {
+        if (typeof req.query.authorId === 'string' && mongoose.Types.ObjectId.isValid(req.query.authorId)) {
             filter.authorId = req.query.authorId;
+        } else if (typeof req.query.authorKey === 'string' && req.query.authorKey.startsWith('p_')) {
+            // Public locator: resolve the opaque profileKey without exposing ObjectIds.
+            const candidates = await User.find({}).select('_id');
+            const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === req.query.authorKey);
+            if (match) {
+                filter.authorId = match._id;
+            } else {
+                return res.status(200).json({ status: 'success', results: 0, data: [] });
+            }
         }
         const projects = await OpenSourceProject.find(filter).sort({ stars: -1, createdAt: -1 });
         return res.status(200).json({ status: 'success', results: projects.length, data: projects });
@@ -62,6 +77,12 @@ export const listAllOpenSourceProjectsForAdmin = async (_req: Request, res: Resp
 export const createOpenSourceProject = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { title, description, author, stars, githubUrl, demoUrl, category, tags, isPublished } = req.body;
+        if (githubUrl !== undefined && !isSafeHttpUrl(githubUrl)) {
+            return res.status(400).json({ status: 'error', message: 'githubUrl must be an http(s) URL' });
+        }
+        if (typeof demoUrl === 'string' && demoUrl.trim() !== '' && !isSafeHttpUrl(demoUrl)) {
+            return res.status(400).json({ status: 'error', message: 'demoUrl must be an http(s) URL' });
+        }
         const project = await OpenSourceProject.create({
             title,
             description,
@@ -95,6 +116,12 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
                 status: 'error',
                 message: 'Vui lòng cung cấp Tên dự án, Mô tả và Đường dẫn GitHub Repository',
             });
+        }
+        if (!isSafeHttpUrl(githubUrl)) {
+            return res.status(400).json({ status: 'error', message: 'githubUrl must be an http(s) URL' });
+        }
+        if (typeof demoUrl === 'string' && demoUrl.trim() !== '' && !isSafeHttpUrl(demoUrl)) {
+            return res.status(400).json({ status: 'error', message: 'demoUrl must be an http(s) URL' });
         }
 
         const project = await OpenSourceProject.create({

@@ -63,12 +63,13 @@ export const globalSearch = async (req: Request, res: Response, next: NextFuncti
         .lean(),
 
       User.find({
+        // MSSV is private and must never be searchable — matching on it would
+        // let callers probe whether a given student ID exists.
         $or: [
           { firstname: regex },
           { lastname: regex },
           { nickname: regex },
           { major: regex },
-          { MSSV: regex },
         ],
       })
         .select('firstname lastname nickname major gen profileKey')

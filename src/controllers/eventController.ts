@@ -33,9 +33,38 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
+const ALLOWED_EVENT_FIELDS = [
+    'title',
+    'date',
+    'time',
+    'location',
+    'status',
+    'speakers',
+    'coverImage',
+    'description',
+    'registerUrl',
+    'checkinUrl',
+    'isFeatured',
+];
+
+// Whitelist only — never mass-assign req.body (blocks _id/status injection).
+const pickEventFields = (body: any): Record<string, any> => {
+    const payload: Record<string, any> = {};
+    for (const key of ALLOWED_EVENT_FIELDS) {
+        if (body?.[key] !== undefined) {
+            payload[key] = body[key];
+        }
+    }
+    return payload;
+};
+
+// Registration/check-in links render as anchors — only http(s) or the '#' placeholder.
+const isSafeFormUrl = (value: unknown): boolean =>
+    value === '#' || (typeof value === 'string' && /^https?:\/\//i.test(value.trim()));
+
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const payload = { ...req.body };
+        const payload = pickEventFields(req.body);
         if (!payload.coverImage || payload.coverImage.trim() === '') {
             payload.coverImage = '/images/dever_blog_hero.png';
         }
@@ -44,6 +73,11 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
         }
         if (!payload.checkinUrl || payload.checkinUrl.trim() === '') {
             payload.checkinUrl = '#';
+        }
+        for (const key of ['registerUrl', 'checkinUrl'] as const) {
+            if (payload[key] !== undefined && !isSafeFormUrl(payload[key])) {
+                return res.status(400).json({ status: 'error', message: `${key} must be an http(s) URL` });
+            }
         }
 
         if (payload.isFeatured) {
@@ -62,12 +96,17 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
 
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const payload = { ...req.body };
+        const payload = pickEventFields(req.body);
         if (payload.registerUrl !== undefined && (!payload.registerUrl || payload.registerUrl.trim() === '')) {
             payload.registerUrl = '#';
         }
         if (payload.checkinUrl !== undefined && (!payload.checkinUrl || payload.checkinUrl.trim() === '')) {
             payload.checkinUrl = '#';
+        }
+        for (const key of ['registerUrl', 'checkinUrl'] as const) {
+            if (payload[key] !== undefined && !isSafeFormUrl(payload[key])) {
+                return res.status(400).json({ status: 'error', message: `${key} must be an http(s) URL` });
+            }
         }
 
         if (payload.isFeatured) {

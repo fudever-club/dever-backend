@@ -139,7 +139,7 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
         const authorName = [authorUser?.firstname, authorUser?.lastname].filter(Boolean).join(' ') || 'Thành viên DEVER';
         const authorRole = isAdmin ? 'Ban Quản Trị' : 'Thành viên DEVER';
 
-        const { author: _untrustedAuthor, slug: _untrustedSlug, ...safeRequestBody } = req.body;
+        const { author: _untrustedAuthor, slug: _untrustedSlug, likes: _untrustedLikes, viewCount: _untrustedViews, isFeatured: _untrustedFeatured, ...safeRequestBody } = req.body;
         
         // Members submit as draft or pending_review; Admins can publish directly if status is 'published'
         let initialStatus = 'draft';

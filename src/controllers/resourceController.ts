@@ -24,6 +24,8 @@ const parseFileData = (value: unknown) => {
     return { mimeType: match[1], bytes, encoded: match[2] };
 };
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const SEED_RESOURCES = [
     {
         title: 'Slide Workshop: Tối Ưu Hóa Next.js 14 App Router & Server Components',
@@ -86,7 +88,7 @@ export const getAllResources = async (req: Request, res: Response, next: NextFun
             filter.isFeatured = false;
         }
         if (typeof req.query.category === 'string' && req.query.category.trim()) {
-            filter.category = new RegExp(req.query.category.trim(), 'i');
+            filter.category = new RegExp(escapeRegExp(req.query.category.trim()), 'i');
         }
 
         const resources = await Resource.find(filter).select('-fileData').sort({ createdAt: -1 });
