@@ -44,5 +44,8 @@
     },
     "devDependencies": {
         "@types/sanitize-html": "^2.16.1"
+    },
+    "engines": {
+        "node": "22.x"
     }
 }
