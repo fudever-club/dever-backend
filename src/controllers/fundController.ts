@@ -174,27 +174,43 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
  */
 export const getAdminCampaigns = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        const campaigns = await FundCampaign.find({}).sort({ createdAt: -1 });
+        const campaigns = await FundCampaign.find({}).sort({ createdAt: -1 }).lean();
 
-        // Attach statistics to each campaign
-        const campaignsWithStats = await Promise.all(
-            campaigns.map(async (c) => {
-                const totalPayments = await FundPayment.countDocuments({ campaignId: c._id });
-                const approvedPayments = await FundPayment.countDocuments({ campaignId: c._id, status: 'approved' });
-                const pendingPayments = await FundPayment.countDocuments({ campaignId: c._id, status: 'pending' });
-                const totalCollected = approvedPayments * c.amount;
-
-                return {
-                    ...c.toObject(),
-                    stats: {
-                        totalPayments,
-                        approvedPayments,
-                        pendingPayments,
-                        totalCollected,
+        // One aggregate for all campaigns instead of 3 count queries per campaign.
+        const paymentStats = await FundPayment.aggregate([
+            {
+                $group: {
+                    _id: '$campaignId',
+                    totalPayments: { $sum: 1 },
+                    approvedPayments: {
+                        $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] },
                     },
-                };
-            }),
+                    pendingPayments: {
+                        $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] },
+                    },
+                },
+            },
+        ]);
+        const statsByCampaign = new Map(
+            paymentStats.map((row: any) => [String(row._id), row]),
         );
+
+        const campaignsWithStats = campaigns.map((c: any) => {
+            const stats = statsByCampaign.get(String(c._id)) || {
+                totalPayments: 0,
+                approvedPayments: 0,
+                pendingPayments: 0,
+            };
+            return {
+                ...c,
+                stats: {
+                    totalPayments: stats.totalPayments,
+                    approvedPayments: stats.approvedPayments,
+                    pendingPayments: stats.pendingPayments,
+                    totalCollected: stats.approvedPayments * c.amount,
+                },
+            };
+        });
 
         return res.status(200).json({
             status: 'success',
@@ -381,9 +397,26 @@ export const getFundAnalytics = async (_req: Request, res: Response, next: NextF
         let totalMoneyCollected = 0;
 
         if (activeCampaign) {
-            totalApproved = await FundPayment.countDocuments({ campaignId: activeCampaign._id, status: 'approved' });
-            totalPending = await FundPayment.countDocuments({ campaignId: activeCampaign._id, status: 'pending' });
-            totalRejected = await FundPayment.countDocuments({ campaignId: activeCampaign._id, status: 'rejected' });
+            const [counts] = await FundPayment.aggregate([
+                { $match: { campaignId: activeCampaign._id } },
+                {
+                    $group: {
+                        _id: null,
+                        approved: {
+                            $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] },
+                        },
+                        pending: {
+                            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] },
+                        },
+                        rejected: {
+                            $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] },
+                        },
+                    },
+                },
+            ]);
+            totalApproved = counts?.approved ?? 0;
+            totalPending = counts?.pending ?? 0;
+            totalRejected = counts?.rejected ?? 0;
             totalMoneyCollected = totalApproved * activeCampaign.amount;
         }
 

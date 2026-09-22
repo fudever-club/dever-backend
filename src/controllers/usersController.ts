@@ -234,14 +234,25 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 
         // 1. Try finding by profileKey (HMAC deterministic locator)
         if (identifier.startsWith('p_')) {
-            const candidates = await User.find({}).select('_id');
-            const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === identifier);
-            if (match) {
-                user = await User.findById(match._id)
-                    .populate('majorId')
-                    .populate('positionId')
-                    .populate('departments')
-                    .populate('socials.socialId');
+            // Fast path: persisted key from the backfill/save hook.
+            const stored = await User.findOne({ profileKey: identifier })
+                .populate('majorId')
+                .populate('positionId')
+                .populate('departments')
+                .populate('socials.socialId');
+            if (stored) {
+                user = stored;
+            } else {
+                // Fallback for legacy rows without a persisted key.
+                const candidates = await User.find({ profileKey: null }).select('_id');
+                const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === identifier);
+                if (match) {
+                    user = await User.findById(match._id)
+                        .populate('majorId')
+                        .populate('positionId')
+                        .populate('departments')
+                        .populate('socials.socialId');
+                }
             }
         }
 

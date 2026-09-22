@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 import { NextFunction } from 'express';
 import { generateUniqueSlug } from '../Utils/generateSlug';
+import { toPublicProfileKey } from '../Utils/userDto';
 
 const userSchema = mongoose.Schema(
     {
@@ -118,6 +119,14 @@ const userSchema = mongoose.Schema(
             type: String,
             default: null,
         },
+        profileKey: {
+            type: String,
+            default: null,
+            // Persisted opaque public locator (HMAC of _id). Sparse unique:
+            // backfilled by migration, set on save for new users, resolved
+            // by indexed lookup with HMAC-scan fallback for legacy rows.
+            index: { unique: true, sparse: true },
+        },
         profileVisibility: {
             email: { type: Boolean, default: false },
             phone: { type: Boolean, default: false },
@@ -181,10 +190,18 @@ userSchema.pre('save', async function (this: any, next: NextFunction) {
         if (user.isModified('password')) {
             user.password = await bcrypt.hash(user.password, 10);
         }
-        return next();
     } catch (error) {
         return next(error as Error);
     }
+    try {
+        if (!user.profileKey && user._id) {
+            user.profileKey = toPublicProfileKey(user);
+        }
+    } catch {
+        // Secret unavailable (e.g. incomplete env): leave null so the save
+        // succeeds; lookups fall back to deterministic HMAC resolution.
+    }
+    return next();
 });
 
 userSchema.pre('save', async function (this: any, next: NextFunction) {

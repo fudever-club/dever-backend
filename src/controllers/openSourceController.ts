@@ -50,10 +50,12 @@ export const listOpenSourceProjects = async (req: Request, res: Response, next: 
             filter.authorId = req.query.authorId;
         } else if (typeof req.query.authorKey === 'string' && req.query.authorKey.startsWith('p_')) {
             // Public locator: resolve the opaque profileKey without exposing ObjectIds.
-            const candidates = await User.find({}).select('_id');
-            const match = candidates.find((candidate: any) => toPublicProfileKey(candidate) === req.query.authorKey);
-            if (match) {
-                filter.authorId = match._id;
+            const stored = await User.findOne({ profileKey: req.query.authorKey }).select('_id');
+            const holder = stored || (await User.find({ profileKey: null }).select('_id')).find(
+                (candidate: any) => toPublicProfileKey(candidate) === req.query.authorKey,
+            );
+            if (holder) {
+                filter.authorId = holder._id;
             } else {
                 return res.status(200).json({ status: 'success', results: 0, data: [] });
             }

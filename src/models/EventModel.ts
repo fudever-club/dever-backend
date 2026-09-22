@@ -76,4 +76,7 @@ const eventSchema = mongoose.Schema(
     { timestamps: true },
 );
 
+eventSchema.index({ date: -1 });
+eventSchema.index({ isFeatured: -1, date: -1 });
+
 export const Event = mongoose.model('Event', eventSchema);

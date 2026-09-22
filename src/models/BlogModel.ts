@@ -78,6 +78,7 @@ const blogSchema = mongoose.Schema(
 
 blogSchema.index({ isFeatured: -1, createdAt: -1 });
 blogSchema.index({ status: 1, isFeatured: -1 });
+blogSchema.index({ slug: 1 });
 
 export const Blog = mongoose.model('Blog', blogSchema);
 
