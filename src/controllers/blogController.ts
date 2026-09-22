@@ -4,6 +4,7 @@ import { Blog } from '../models/BlogModel';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
 import { invalidateCache } from '../services/cacheService';
+import { sanitizeBlogHtml, sanitizePlainText } from '../Utils/sanitize';
 
 const escapeRegExp = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
@@ -155,8 +156,10 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
             ...safeRequestBody,
             title,
             slug,
-            content: req.body.content || '',
-            excerpt: req.body.excerpt || (req.body.content ? req.body.content.slice(0, 150) + '...' : ''),
+            content: sanitizeBlogHtml(req.body.content),
+            excerpt: req.body.excerpt
+                ? sanitizePlainText(req.body.excerpt)
+                : sanitizePlainText(req.body.content, 150),
             category: req.body.category || 'Web & Frontend',
             tags: Array.isArray(req.body.tags) ? req.body.tags : [],
             readTime: calculateReadTime(req.body.content || ''),
@@ -222,10 +225,10 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
         const updates: any = {};
         if (req.body.title) updates.title = req.body.title;
         if (req.body.content !== undefined) {
-            updates.content = req.body.content;
+            updates.content = sanitizeBlogHtml(req.body.content);
             updates.readTime = calculateReadTime(req.body.content);
         }
-        if (req.body.excerpt !== undefined) updates.excerpt = req.body.excerpt;
+        if (req.body.excerpt !== undefined) updates.excerpt = sanitizePlainText(req.body.excerpt);
         if (req.body.category !== undefined) updates.category = req.body.category;
         if (req.body.tags !== undefined) updates.tags = req.body.tags;
         if (req.body.coverImage !== undefined) updates.coverImage = req.body.coverImage;
