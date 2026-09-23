@@ -2,6 +2,14 @@ import { ErrorType } from './../middlewares/errorHandler';
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
 import { getJwtSecret } from '../config/auth';
+import {
+    REFRESH_COOKIE,
+    clearAuthCookies,
+    issueSession,
+    revokeSession,
+    rotateSession,
+    setAuthCookies,
+} from '../Utils/session';
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -34,6 +42,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         }
 
         const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
+        // Cookie session alongside the legacy body token so browser clients can
+        // migrate to httpOnly storage without breaking existing integrations.
+        const session = await issueSession(user._id.toString());
+        setAuthCookies(req, res, { access: token, refresh: session.refreshToken });
         const { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId } = user;
         return res.status(200).json({
             status: 'success',
@@ -49,6 +61,36 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
 export const welcome = (_req: Request, res: Response) =>
     res.status(200).json({ status: 'success', message: 'Welcome to the FU-DEVER' });
+
+export const refresh = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const presented =
+            ((req.cookies as any)?.[REFRESH_COOKIE] as string) ||
+            (typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '');
+        if (!presented) {
+            return res.status(401).json({ status: 'error', message: 'Refresh token required' });
+        }
+        const result = await rotateSession(presented);
+        if (result.status !== 'ok') {
+            clearAuthCookies(req, res);
+            return res.status(401).json({ status: 'error', message: 'Session expired, please sign in again' });
+        }
+        setAuthCookies(req, res, { access: result.accessToken, refresh: result.refreshToken });
+        return res.status(200).json({ status: 'success', data: { token: result.accessToken } });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        await revokeSession((req.cookies as any)?.[REFRESH_COOKIE] as string | undefined);
+        clearAuthCookies(req, res);
+        return res.status(200).json({ status: 'success', message: 'Signed out' });
+    } catch (error) {
+        return next(error);
+    }
+};
 
 // Kept for compatibility with existing imports; intentionally no longer exposed by a route.
 export const lowercaseEmail = async (_req: Request, _res: Response, next: NextFunction) => {

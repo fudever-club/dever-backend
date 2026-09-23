@@ -36,9 +36,12 @@ connectDB();
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 const mongoose = require('mongoose');
 
 const app = express();
+// Behind Railway/Vercel proxies so req.secure reflects the real scheme.
+app.set('trust proxy', 1);
 const server = require('http').Server(app);
 // Railway injects PORT for the public proxy. APP_PORT remains a local
 // development override when PORT is not supplied.
@@ -110,6 +113,7 @@ app.use(
 // MongoDB document limit while allowing the 8 MB file limit enforced by the
 // resource controller after base64 encoding.
 app.use(express.json({ limit: '12mb' }));
+app.use(cookieParser());
 
 // Liveness is intentionally independent of MongoDB so load balancers can tell
 // that the process is running while the database is reconnecting.

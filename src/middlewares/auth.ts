@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { getJwtSecret } from '../config/auth';
+import { ACCESS_COOKIE, readAccessToken } from '../Utils/session';
 import { User } from '../models/UserModel';
 import { Position } from '../models/PositionModel';
 
@@ -20,18 +21,8 @@ const unauthorized = (res: Response, message = 'Authentication is required') =>
         message,
     });
 
-const parseBearerToken = (req: Request): string | null => {
-    const authorization = req.header('authorization');
-    if (!authorization || !authorization.startsWith('Bearer ')) {
-        return null;
-    }
-
-    const token = authorization.slice('Bearer '.length).trim();
-    return token || null;
-};
-
 const authenticate = async (req: Request): Promise<AuthContext | null> => {
-    const token = parseBearerToken(req);
+    const token = readAccessToken(req);
     if (!token) {
         return null;
     }
@@ -76,7 +67,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
 /** Attach a valid identity when supplied, while retaining anonymous public reads. */
 export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.header('authorization')) {
+    if (!req.header('authorization') && !((req.cookies as any)?.[ACCESS_COOKIE])) {
         return next();
     }
 

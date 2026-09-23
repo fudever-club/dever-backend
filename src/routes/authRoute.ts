@@ -1,7 +1,7 @@
 import express from 'express';
 
-import { login, welcome } from '../controllers/authController';
-import { loginLimiter } from '../middlewares/rateLimit';
+import { login, logout, refresh, welcome } from '../controllers/authController';
+import { loginLimiter, refreshLimiter } from '../middlewares/rateLimit';
 
 const Router = express.Router();
 
@@ -51,5 +51,7 @@ const Router = express.Router();
  */
 Router.route('/').get(welcome);
 Router.route('/login').post(loginLimiter, login);
+Router.route('/refresh').post(refreshLimiter, refresh);
+Router.route('/logout').post(logout);
 
 module.exports = Router;
