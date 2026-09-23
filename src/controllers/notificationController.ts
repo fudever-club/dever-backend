@@ -1,7 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Notification } from '../models/NotificationModel';
+import { NotificationRead } from '../models/NotificationReadModel';
+import { toNotificationDto } from '../Utils/notificationDto';
 import { testTelegramBotConnection } from '../services/telegramService';
+
+/**
+ * Visibility rule: a personal notification belongs to exactly one member; a
+ * broadcast belongs to everyone only when it addresses nobody in particular.
+ * Records addressed to a *different* member stay hidden even when they carry
+ * a broadcast role.
+ */
+const visibleNotificationsQuery = (userId: string, isAdmin: boolean) => ({
+    $or: [
+        { recipientId: new mongoose.Types.ObjectId(userId) },
+        { recipientRole: 'all', recipientId: null },
+        ...(isAdmin ? [{ recipientRole: 'admin' }] : []),
+    ],
+});
+
+const readNotificationIds = async (userId: string): Promise<Set<string>> => {
+    const ids = await NotificationRead.distinct('notificationId', {
+        userId: new mongoose.Types.ObjectId(userId),
+    });
+    return new Set((ids || []).map(String));
+};
 
 /**
  * Get current user's notifications (includes personal + relevant role/broadcast notifications)
@@ -19,31 +42,26 @@ export const getMyNotifications = async (req: Request, res: Response, next: Next
         const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 15));
         const skip = (page - 1) * limit;
 
-        const orConditions: any[] = [
-            { recipientId: new mongoose.Types.ObjectId(userId) },
-            { recipientRole: 'all' },
-        ];
+        const query = visibleNotificationsQuery(userId, isAdmin);
 
-        if (isAdmin) {
-            orConditions.push({ recipientRole: 'admin' });
-        }
-
-        const query = { $or: orConditions };
-
-        const [notifications, total, unreadCount] = await Promise.all([
+        const [notifications, total, readIds] = await Promise.all([
             Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
             Notification.countDocuments(query),
-            Notification.countDocuments({ ...query, isRead: false }),
+            readNotificationIds(userId),
         ]);
+
+        const data = notifications.map((notification: any) =>
+            toNotificationDto(notification, readIds.has(String(notification._id))),
+        );
 
         return res.status(200).json({
             status: 'success',
-            results: notifications.length,
+            results: data.length,
             total,
-            unreadCount,
+            unreadCount: Math.max(0, total - readIds.size),
             page,
             totalPages: Math.ceil(total / limit),
-            data: notifications,
+            data,
         });
     } catch (error) {
         next(error);
@@ -51,7 +69,8 @@ export const getMyNotifications = async (req: Request, res: Response, next: Next
 };
 
 /**
- * Mark a single notification as read
+ * Mark a single notification as read (per-reader receipt; the shared document
+ * is never mutated, so other readers are unaffected)
  */
 export const markNotificationAsRead = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -67,27 +86,24 @@ export const markNotificationAsRead = async (req: Request, res: Response, next: 
         }
 
         const isAdmin = Boolean(res.locals.auth?.isAdmin);
-        const orConditions: any[] = [
-            { recipientId: new mongoose.Types.ObjectId(userId) },
-            { recipientRole: 'all' },
-        ];
-        if (isAdmin) {
-            orConditions.push({ recipientRole: 'admin' });
-        }
-
-        const notification = await Notification.findOneAndUpdate(
-            { _id: id, $or: orConditions },
-            { isRead: true },
-            { new: true }
-        );
+        const notification = await Notification.findOne({
+            _id: id,
+            $or: (visibleNotificationsQuery(userId, isAdmin) as any).$or,
+        });
 
         if (!notification) {
             return res.status(404).json({ status: 'error', message: 'Notification not found' });
         }
 
+        await NotificationRead.updateOne(
+            { userId: new mongoose.Types.ObjectId(userId), notificationId: notification._id },
+            { $setOnInsert: { userId: new mongoose.Types.ObjectId(userId), notificationId: notification._id, readAt: new Date() } },
+            { upsert: true },
+        );
+
         return res.status(200).json({
             status: 'success',
-            data: notification,
+            data: toNotificationDto(notification, true),
         });
     } catch (error) {
         next(error);
@@ -95,7 +111,8 @@ export const markNotificationAsRead = async (req: Request, res: Response, next: 
 };
 
 /**
- * Mark all notifications for the user as read
+ * Mark all notifications for the user as read (receipts for visible docs only;
+ * shared documents are never mutated)
  */
 export const markAllNotificationsAsRead = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -106,16 +123,28 @@ export const markAllNotificationsAsRead = async (req: Request, res: Response, ne
             return res.status(401).json({ status: 'error', message: 'Authentication required' });
         }
 
-        const orConditions: any[] = [
-            { recipientId: new mongoose.Types.ObjectId(userId) },
-            { recipientRole: 'all' },
-        ];
-
-        if (isAdmin) {
-            orConditions.push({ recipientRole: 'admin' });
+        const query = visibleNotificationsQuery(userId, isAdmin);
+        const visible = await Notification.find(query).select('_id');
+        if (visible.length > 0) {
+            await NotificationRead.bulkWrite(
+                visible.map((doc: any) => ({
+                    updateOne: {
+                        filter: {
+                            userId: new mongoose.Types.ObjectId(userId),
+                            notificationId: doc._id,
+                        },
+                        update: {
+                            $setOnInsert: {
+                                userId: new mongoose.Types.ObjectId(userId),
+                                notificationId: doc._id,
+                                readAt: new Date(),
+                            },
+                        },
+                        upsert: true,
+                    },
+                })),
+            );
         }
-
-        await Notification.updateMany({ $or: orConditions, isRead: false }, { isRead: true });
 
         return res.status(200).json({
             status: 'success',
@@ -155,6 +184,8 @@ export const deleteNotification = async (req: Request, res: Response, next: Next
         }
 
         await Notification.findByIdAndDelete(id);
+        // Drop orphaned read receipts so they cannot skew future unread counts.
+        await NotificationRead.deleteMany({ notificationId: id }).catch(() => {});
 
         return res.status(200).json({
             status: 'success',

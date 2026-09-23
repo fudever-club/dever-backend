@@ -256,7 +256,9 @@ export const processTelegramCallbackQuery = async (callbackQuery: any) => {
                     title: 'Dự án của bạn đã được xuất bản! 🌟',
                     message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
                     link: '/discover',
-                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: author },
+                    // Identifiers only: full author/project objects historically
+                    // embedded credential-bearing fields (password hashes).
+                    meta: { projectId: project._id, authorId: project.authorId, milestone: { badgeTitle: 'Core Contributor' } },
                     sendTelegram: false,
                 }).catch(() => {});
             }
@@ -332,14 +334,16 @@ ${originalText}
  */
 export const handleTelegramWebhook = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Verify Telegram secret token when configured (set via setWebhook secret_token).
-        // Skipped only when TELEGRAM_WEBHOOK_SECRET is unset to preserve existing deploys.
+        // Fail closed: without a configured secret this endpoint stays dark
+        // (503), and a wrong/missing header is rejected (401) — always before
+        // any database read, Telegram effect, or command handling.
         const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-        if (expectedSecret) {
-            const provided = req.get('X-Telegram-Bot-Api-Secret-Token');
-            if (provided !== expectedSecret) {
-                return res.status(401).json({ ok: false });
-            }
+        if (!expectedSecret) {
+            return res.status(503).json({ ok: false, error: 'webhook_not_configured' });
+        }
+        const provided = req.get('X-Telegram-Bot-Api-Secret-Token');
+        if (provided !== expectedSecret) {
+            return res.status(401).json({ ok: false });
         }
         if (req.body?.callback_query) {
             await processTelegramCallbackQuery(req.body.callback_query);
