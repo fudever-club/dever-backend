@@ -128,6 +128,11 @@ export const subcribeLeetcode = async (req: Request, res: Response, next: NextFu
 
         // Also update User document
         await User.findByIdAndUpdate(userId, { leetcodeUsername: cleanUsername });
+        // Linking an account is an explicit opt-in to the public leaderboard.
+        await User.updateOne(
+            { _id: userId },
+            { $set: { 'profileVisibility.leetcode': true } },
+        ).catch(() => {});
 
         invalidateCache('leetcode');
 
