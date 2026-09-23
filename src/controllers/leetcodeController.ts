@@ -45,24 +45,31 @@ export const getLeaderBoard = async (req: Request, res: Response, next: NextFunc
     try {
         const users = await Leaderboard.find({}).populate({
             path: 'userId',
-            select: 'id firstname lastname avatar',
+            select: 'id firstname lastname avatar profileVisibility',
         });
 
         users.sort((a: any, b: any) => (b.acSubmissionList?.length || 0) - (a.acSubmissionList?.length || 0));
 
-        const leaderboard = users.map((entry: any) => ({
-            leetcodeUsername: entry.leetcodeUsername,
-            acSubmissionList: entry.acSubmissionList || [],
-            user: entry.userId
-                ? {
-                      firstname: entry.userId.firstname || null,
-                      lastname: entry.userId.lastname || null,
-                      avatar: entry.userId.avatar || null,
-                      profileKey: toPublicProfileKey(entry.userId),
-                  }
-                : null,
-        }));
+        // Only members who explicitly opted their LeetCode activity in appear.
+        // Opted-out, legacy (no flag), and orphaned entries stay out.
+        const leaderboard = users
+            .filter((entry: any) => entry.userId && entry.userId.profileVisibility?.leetcode === true)
+            .map((entry: any) => ({
+                leetcodeUsername: entry.leetcodeUsername,
+                acSubmissionList: entry.acSubmissionList || [],
+                user: entry.userId
+                    ? {
+                        firstname: entry.userId.firstname || null,
+                        lastname: entry.userId.lastname || null,
+                        avatar: entry.userId.avatar || null,
+                        profileKey: toPublicProfileKey(entry.userId),
+                      }
+                    : null,
+            }));
 
+        // Membership of this list depends on per-user privacy flags, so it
+        // must never be stored by shared or downstream caches.
+        res.setHeader('Cache-Control', 'no-store');
         res.status(200).json({
             status: 'success',
             data: leaderboard,

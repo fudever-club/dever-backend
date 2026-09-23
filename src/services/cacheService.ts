@@ -105,6 +105,13 @@ export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => 
       return next();
     }
 
+    // Authenticated traffic is never served from — or written to — the shared
+    // cache, so one member's private view can never leak into another's.
+    if ((res as any).locals?.auth) {
+      res.setHeader('Cache-Control', 'no-store');
+      return next();
+    }
+
     const group = cacheGroup || req.baseUrl || 'default';
     const cacheKey = `[${group}]:${req.originalUrl}`;
     const cachedData = memoryCache.get(cacheKey);
@@ -121,7 +128,11 @@ export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => 
     // Intercept res.json to capture response payload on success
     const originalJson = res.json.bind(res);
     res.json = (body: any) => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      const downstreamCacheControl =
+        typeof res.getHeader === 'function' ? String(res.getHeader('Cache-Control') || '') : '';
+      // Honor a downstream no-store (e.g. private previews): never persist it,
+      // and never overwrite its header with a public cache directive.
+      if (res.statusCode >= 200 && res.statusCode < 300 && !/no-store/i.test(downstreamCacheControl)) {
         memoryCache.set(cacheKey, body, ttlSeconds);
         res.setHeader('X-Cache', 'MISS');
         res.setHeader(

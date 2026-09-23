@@ -8,7 +8,12 @@ import { Position } from '../models/PositionModel';
 
 export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { token } = req.body;
+        // Prefer the Authorization header (consistent with the auth middleware);
+        // retain the legacy body token only as a fallback.
+        const header = req.header('authorization');
+        const headerToken =
+            header && header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+        const token = headerToken || req.body?.token;
         if (!token) {
             return res.status(400).json({ status: 'error', message: 'Token is required' });
         }
@@ -21,6 +26,8 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         }
         const responseData = toPrivateUserDto(user);
 
+        // Account data must never be stored by shared or downstream caches.
+        res.setHeader('Cache-Control', 'no-store');
         return res.status(200).json({
             status: 'success',
             data: responseData,

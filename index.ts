@@ -39,6 +39,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 const mongoose = require('mongoose');
 
+import { createCorsOptions } from './src/config/cors';
+
 const app = express();
 // Behind Railway/Vercel proxies so req.secure reflects the real scheme.
 app.set('trust proxy', 1);
@@ -47,67 +49,10 @@ const server = require('http').Server(app);
 // development override when PORT is not supplied.
 const port = Number(process.env.PORT || process.env.APP_PORT || 5000);
 
-const defaultAllowedOrigins = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:3002',
-    'http://127.0.0.1:3002',
-    'http://localhost:3003',
-    'http://127.0.0.1:3003',
-    'https://fudever.com',
-    'https://www.fudever.com',
-    'https://client.fudever.com',
-    'https://admin.fudever.com',
-    'http://fudever.com',
-    'http://www.fudever.com',
-    'http://client.fudever.com',
-    'http://admin.fudever.com',
-    'https://fu-dever-landingpage-v2.vercel.app',
-    'https://dever-client-sigma.vercel.app',
-    'https://dever-admin-three.vercel.app',
-    'https://dever-client-taupe.vercel.app',
-    'https://dever-admin-lac.vercel.app',
-    'https://dashboard.fu-dever.com',
-    'https://admin.fu-dever.com',
-    'https://fu-dever.com',
-    'https://www.fu-dever.com',
-    'https://dever-landing.fu-dever.workers.dev',
-    'https://dever-admin.fu-dever.workers.dev',
-    'https://dever-client.fu-dever.workers.dev',
-];
-
-const envOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : [];
-
-const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
-
-app.use(
-    cors({
-        origin(origin, callback) {
-            // Server-to-server checks and same-origin requests do not include Origin.
-            if (!origin || allowedOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-            // Allow dynamic Vercel / Railway / Cloudflare / fudever custom domains / localhost
-            if (
-                /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-                /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
-                /fudever\.com$/.test(origin) ||
-                /fu-dever\.com$/.test(origin) ||
-                /\.vercel\.app$/.test(origin) ||
-                /\.up\.railway\.app$/.test(origin) ||
-                /\.workers\.dev$/.test(origin)
-            ) {
-                return callback(null, true);
-            }
-            return callback(null, false);
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    }),
-);
+// Exact-match origin policy lives in src/config/cors.ts. Preview or tenant
+// deployments not on the built-in roster must be added explicitly through
+// the CORS_ORIGINS environment variable — never via domain wildcards.
+app.use(cors(createCorsOptions()));
 
 // Resource uploads are stored as encoded document bytes. Keep this below the
 // MongoDB document limit while allowing the 8 MB file limit enforced by the

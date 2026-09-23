@@ -127,41 +127,55 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
         const skip = (page - 1) * limit;
         const filter: Record<string, unknown> = {};
         const admin = isAdmin(res);
-        // Allowlisted scalar filter keys only — blocks NoSQL operator injection
-        // (e.g. {"isAdmin": true}, {"email": {"$ne": null}}, {"$where": ...}).
-        const ALLOWED_FILTER_KEYS = [
+        // Strict allowlist — anything outside it is a 400, never silently
+        // dropped, so filter probes cannot oracle private fields. Nicknames
+        // are display-public but not filterable by non-admins (exact-match
+        // enumeration), and sensitive identity fields are admin-only.
+        const BASE_ALLOWED_FILTER_KEYS = [
             'firstname',
             'lastname',
-            'nickname',
             'gen',
-            'kGeneration',
             'positionId',
             'majorId',
             'departments',
             'isLeader',
             'isExcellent',
         ];
-        const ADMIN_ONLY_FILTER_KEYS = ['email', 'phone', 'MSSV'];
+        const ADMIN_ONLY_FILTER_KEYS = ['nickname', 'email', 'phone', 'MSSV'];
+        const invalidFilter = () =>
+            res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
 
         if (req.query.filter) {
             try {
-                const requested = JSON.parse(req.query.filter as string) as Record<string, unknown>;
-                for (const [key, value] of Object.entries(requested)) {
-                    if (key.startsWith('$') || key.includes('.')) {
-                        continue;
-                    }
-                    const keyAllowed =
-                        ALLOWED_FILTER_KEYS.includes(key) ||
-                        (admin && ADMIN_ONLY_FILTER_KEYS.includes(key));
-                    if (!keyAllowed) {
-                        continue;
-                    }
+                const requested: unknown = JSON.parse(req.query.filter as string);
+                if (!requested || typeof requested !== 'object' || Array.isArray(requested)) {
+                    return invalidFilter();
+                }
+                for (const [key, value] of Object.entries(requested as Record<string, unknown>)) {
                     if (value === '' || value === null || value === undefined) {
                         continue;
                     }
-                    // Reject objects/arrays — operators hide there.
-                    if (typeof value === 'object') {
+                    if (key.startsWith('$') || key.includes('.')) {
+                        return invalidFilter();
+                    }
+                    // Generation alias used by the member directory UI.
+                    if (key === 'kGeneration') {
+                        const gen = typeof value === 'number' ? value : parseInt(String(value), 10);
+                        if (!Number.isSafeInteger(gen)) {
+                            return invalidFilter();
+                        }
+                        filter.gen = gen;
                         continue;
+                    }
+                    // Operators hide in objects/arrays; only scalars pass.
+                    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+                        return invalidFilter();
+                    }
+                    const keyAllowed =
+                        BASE_ALLOWED_FILTER_KEYS.includes(key) ||
+                        (admin && ADMIN_ONLY_FILTER_KEYS.includes(key));
+                    if (!keyAllowed) {
+                        return invalidFilter();
                     }
                     filter[key] = value;
                 }
@@ -183,23 +197,19 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                         delete filter.isLeader;
                     }
                 }
-                if (!admin) {
-                    delete filter.MSSV;
-                    delete filter.email;
-                    delete filter.phone;
-                    delete filter.kGeneration;
-                }
             } catch (_error) {
-                return res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
+                return invalidFilter();
             }
         }
 
         const search = typeof req.query.search === 'string' ? req.query.search.replace(/^"|"$/g, '') : '';
         if (search) {
             const searchRegex = new RegExp(escapeRegExp(search), 'i');
+            // Nicknames stay out of the public predicate: exact-match search
+            // must not become an existence oracle for hidden handles.
             filter.$or = admin
                 ? [{ firstname: searchRegex }, { lastname: searchRegex }, { email: searchRegex }, { nickname: searchRegex }]
-                : [{ firstname: searchRegex }, { lastname: searchRegex }, { nickname: searchRegex }];
+                : [{ firstname: searchRegex }, { lastname: searchRegex }];
         }
 
         const [users, total] = await Promise.all([
@@ -290,11 +300,15 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
         const leaderboard = await Leaderboard.findOne({ userId: user._id }).select('leetcodeUsername acSubmissionList');
         const privateAccess = canSeePrivateUser(res, user);
         const userData = privateAccess ? toPrivateUserDto(user) : toPublicUserDto(user);
-        const canExposeLeetcode = privateAccess || user.profileVisibility?.leetcode !== false;
+        // LeetCode activity is private unless its owner explicitly opts in.
+        const canExposeLeetcode = privateAccess || user.profileVisibility?.leetcode === true;
         const submissions = canExposeLeetcode
             ? (leaderboard?.acSubmissionList || [])
             : [];
-        const leetcodeUsername = leaderboard?.leetcodeUsername || (user as any).leetcodeUsername || null;
+        // The username itself identifies the account: gate it exactly like submissions.
+        const leetcodeUsername = canExposeLeetcode
+            ? (leaderboard?.leetcodeUsername || (user as any).leetcodeUsername || null)
+            : null;
         const leaderboardData = {
             leetcodeUsername,
             acSubmissionList: submissions,

@@ -18,11 +18,11 @@ const PUBLIC_OPTIONAL_FIELDS = [
     'leetcode',
 ] as const;
 
-const SENSITIVE_PRIVATE_FIELDS = new Set(['phone', 'email', 'MSSV', 'dob']);
-
+// Every optional profile field defaults to private. A field appears in a
+// public DTO only after its owner explicitly opts in — never by omission.
 export const DEFAULT_PROFILE_VISIBILITY = Object.freeze(
     PUBLIC_OPTIONAL_FIELDS.reduce((visibility, field) => {
-        visibility[field] = !SENSITIVE_PRIVATE_FIELDS.has(field);
+        visibility[field] = false;
         return visibility;
     }, {} as Record<(typeof PUBLIC_OPTIONAL_FIELDS)[number], boolean>),
 );
@@ -83,8 +83,9 @@ export const toPublicUserDto = (user: any) => {
     };
 
     for (const field of PUBLIC_OPTIONAL_FIELDS) {
-        const isSensitive = SENSITIVE_PRIVATE_FIELDS.has(field);
-        const isAllowed = isSensitive ? visibility[field] === true : visibility[field] !== false;
+        // Explicit opt-in only: an absent or false flag hides the field.
+        // This also governs the sensitive set (phone/email/MSSV/dob).
+        const isAllowed = visibility[field] === true;
         if (field !== 'leetcode' && isAllowed) {
             result[field] = field === 'socials' && Array.isArray(source?.socials)
                 ? source.socials.map(socialDto).filter(Boolean)

@@ -8,6 +8,71 @@ if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
   fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
 }
 
+/**
+ * Fail-closed storage key validation. Rejects absolute inputs, backslash and
+ * percent-encoded traversal, NTFS stream/extension tricks, and anything that
+ * does not resolve inside LOCAL_STORAGE_DIR — checked again with realpath at
+ * use time to defeat symlink escapes.
+ */
+const isSafeRelativeKey = (rawKey: unknown): rawKey is string => {
+  if (typeof rawKey !== 'string' || !rawKey) {
+    return false;
+  }
+  let decoded = rawKey;
+  try {
+    decoded = decodeURIComponent(rawKey);
+  } catch {
+    return false;
+  }
+  if (
+    decoded.startsWith('/') ||
+    decoded.startsWith('\\') ||
+    /^[a-zA-Z]:/.test(decoded) ||
+    path.isAbsolute(decoded)
+  ) {
+    return false;
+  }
+  const segments = decoded.split(/[\\/]/);
+  for (const segment of segments) {
+    if (segment === '.' || segment === '..') {
+      return false;
+    }
+    // NTFS alternate data streams (file:stream) and trailing-dot bypasses.
+    if (segment.includes(':') || /[. ]$/.test(segment)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/** Resolve a validated key to a local path guaranteed inside the storage dir. */
+const resolveLocalPath = (normalizedKey: string): string | null => {
+  const localFilePath = path.join(LOCAL_STORAGE_DIR, normalizedKey);
+  let realPath: string;
+  let rootPath: string;
+  try {
+    realPath = fs.realpathSync(localFilePath);
+    rootPath = fs.realpathSync(LOCAL_STORAGE_DIR);
+  } catch {
+    return null;
+  }
+  if (realPath !== rootPath && !realPath.startsWith(rootPath + path.sep)) {
+    return null;
+  }
+  return realPath;
+};
+
+const isSafeFolder = (folder: unknown): folder is string => {
+  if (typeof folder !== 'string' || !folder) {
+    return false;
+  }
+  const segments = folder.split('/');
+  return (
+    segments.length > 0 &&
+    segments.every((segment) => /^[A-Za-z0-9_-]{1,64}$/.test(segment))
+  );
+};
+
 const getStorageConfig = () => {
   const endpoint =
     process.env.R2_ENDPOINT ||
@@ -92,6 +157,9 @@ export const uploadToStorage = async (
   file: any,
   folder: string = 'media'
 ): Promise<UploadResult> => {
+  if (!isSafeFolder(folder)) {
+    throw new Error('Invalid upload folder');
+  }
   const config = getStorageConfig();
   const timestamp = Date.now();
   const randomHex = Math.random().toString(36).substring(2, 8);
@@ -200,11 +268,10 @@ export const backupToImgBB = async (
 
 export const getFileFromStorage = async (key: string): Promise<FileDownloadStream | null> => {
   const config = getStorageConfig();
-  const normalizedKey = key.replace(/^\/+/, '');
-  // Block path traversal — the local fallback below joins this key onto a directory.
-  if (normalizedKey.split('/').includes('..') || path.isAbsolute(normalizedKey)) {
+  if (!isSafeRelativeKey(key)) {
     return null;
   }
+  const normalizedKey = key.replace(/^\/+/, '');
   const filename = normalizedKey.split('/').pop() || 'document.pdf';
 
   // 1. Try fetching from Cloudflare R2 / S3
@@ -227,12 +294,12 @@ export const getFileFromStorage = async (key: string): Promise<FileDownloadStrea
     console.warn(`S3 read miss for key [${normalizedKey}], checking local filesystem:`, (s3Err as any)?.message);
   }
 
-  // 2. Check local filesystem fallback
+  // 2. Check local filesystem fallback (realpath-contained: defeats symlink escapes)
   try {
-    const localFilePath = path.join(LOCAL_STORAGE_DIR, normalizedKey);
-    if (fs.existsSync(localFilePath)) {
-      const stats = fs.statSync(localFilePath);
-      const readStream = fs.createReadStream(localFilePath);
+    const containedPath = resolveLocalPath(normalizedKey);
+    if (containedPath && fs.existsSync(containedPath)) {
+      const stats = fs.statSync(containedPath);
+      const readStream = fs.createReadStream(containedPath);
       return {
         stream: readStream,
         contentType: 'application/octet-stream',
@@ -249,12 +316,11 @@ export const getFileFromStorage = async (key: string): Promise<FileDownloadStrea
 
 export const deleteFromStorage = async (key: string): Promise<boolean> => {
   try {
-    const config = getStorageConfig();
-    const normalizedKey = key.replace(/^\/+/, '');
-    // Block path traversal — the local delete below joins this key onto a directory.
-    if (normalizedKey.split('/').includes('..') || path.isAbsolute(normalizedKey)) {
+    if (!isSafeRelativeKey(key)) {
       return false;
     }
+    const config = getStorageConfig();
+    const normalizedKey = key.replace(/^\/+/, '');
 
     // 1. Delete from S3/R2
     try {
@@ -268,10 +334,10 @@ export const deleteFromStorage = async (key: string): Promise<boolean> => {
       console.warn('S3 delete warning:', err);
     }
 
-    // 2. Delete from local disk
-    const localFilePath = path.join(LOCAL_STORAGE_DIR, normalizedKey);
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
+    // 2. Delete from local disk (realpath-contained)
+    const containedPath = resolveLocalPath(normalizedKey);
+    if (containedPath && fs.existsSync(containedPath)) {
+      fs.unlinkSync(containedPath);
     }
 
     return true;

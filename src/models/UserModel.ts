@@ -141,6 +141,7 @@ const userSchema = mongoose.Schema(
             favourites: { type: Boolean, default: false },
             description: { type: Boolean, default: false },
             nickname: { type: Boolean, default: false },
+            leetcode: { type: Boolean, default: false },
         },
         socials: [
             {
