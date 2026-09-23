@@ -2,6 +2,7 @@ import express from 'express';
 import {
     createAdminCampaign,
     getActiveCampaign,
+    getAdminAuditLog,
     getAdminCampaigns,
     getAdminPayments,
     getFundAnalytics,
@@ -25,6 +26,7 @@ router.post('/admin/campaigns', requireAuth, requireAdmin, createAdminCampaign);
 router.patch('/admin/campaigns/:id', requireAuth, requireAdmin, updateAdminCampaign);
 router.get('/admin/payments', requireAuth, requireAdmin, getAdminPayments);
 router.patch('/admin/payments/:id/review', requireAuth, requireAdmin, reviewAdminPayment);
+router.get('/admin/audit', requireAuth, requireAdmin, getAdminAuditLog);
 router.get('/admin/analytics', requireAuth, requireAdmin, getFundAnalytics);
 
 export default router;

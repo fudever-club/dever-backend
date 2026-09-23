@@ -1,8 +1,26 @@
 import { NextFunction, Request, Response } from 'express';
 import { FundCampaign } from '../models/FundCampaignModel';
 import { FundPayment } from '../models/FundPaymentModel';
+import { FundAuditLog } from '../models/FundAuditLogModel';
 import { User } from '../models/UserModel';
 import { sendTelegramMessage } from '../services/telegramService';
+
+/** Best-effort audit write: a logging failure must never fail the payment flow. */
+const recordFundAudit = (
+    entry: {
+        paymentId: unknown;
+        campaignId: unknown;
+        payerId: unknown;
+        action: 'submitted' | 'approved' | 'rejected';
+        actorId: unknown;
+        amount: number;
+        note?: string;
+    },
+): void => {
+    FundAuditLog.create(entry as any).catch((err) => {
+        console.error('[FundAudit] write failed:', err?.message || err);
+    });
+};
 
 /**
  * 1. Get currently active fund campaign for member client
@@ -158,6 +176,15 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
 👉 <a href="${adminUrl}/vi/fund-management"><b>XEM VÀ DUYỆT MINH CHỨNG TRÊN ADMIN DASHBOARD</b></a>
 `.trim();
         sendTelegramMessage(undefined, telegramMsg).catch(() => {});
+        recordFundAudit({
+            paymentId: payment._id,
+            campaignId,
+            payerId: userId,
+            action: 'submitted',
+            actorId: userId,
+            amount: payableAmount,
+            note: note || '',
+        });
 
         return res.status(201).json({
             status: 'success',
@@ -372,6 +399,15 @@ export const reviewAdminPayment = async (req: Request, res: Response, next: Next
         payment.reviewedBy = adminId || null;
         payment.reviewedAt = new Date();
         await payment.save();
+        recordFundAudit({
+            paymentId: payment._id,
+            campaignId: payment.campaignId,
+            payerId: payment.userId,
+            action: status as 'approved' | 'rejected',
+            actorId: adminId || null,
+            amount: payment.amount,
+            note: reviewNotes || '',
+        });
 
         return res.status(200).json({
             status: 'success',
@@ -384,7 +420,50 @@ export const reviewAdminPayment = async (req: Request, res: Response, next: Next
 };
 
 /**
- * 9. Admin: Financial analytics
+ * 9. Admin: Append-only audit trail for payment proofs
+ */
+export const getAdminAuditLog = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 24, 1), 100);
+        const skip = (page - 1) * limit;
+        const filter: Record<string, unknown> = {};
+        if (typeof req.query.campaignId === 'string' && req.query.campaignId) {
+            filter.campaignId = req.query.campaignId;
+        }
+        if (typeof req.query.paymentId === 'string' && req.query.paymentId) {
+            filter.paymentId = req.query.paymentId;
+        }
+        if (typeof req.query.action === 'string' && ['submitted', 'approved', 'rejected'].includes(req.query.action)) {
+            filter.action = req.query.action;
+        }
+
+        const [entries, total] = await Promise.all([
+            FundAuditLog.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate('payerId', 'firstname lastname email')
+                .populate('actorId', 'firstname lastname email')
+                .populate('campaignId', 'title amount')
+                .lean(),
+            FundAuditLog.countDocuments(filter),
+        ]);
+
+        return res.status(200).json({
+            status: 'success',
+            results: entries.length,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+            data: entries,
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+/**
+ * 10. Admin: Financial analytics
  */
 export const getFundAnalytics = async (_req: Request, res: Response, next: NextFunction) => {
     try {
