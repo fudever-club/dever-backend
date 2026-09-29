@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { getJwtSecret } from './config/auth';
+import { buildAllowedOrigins } from './config/cors';
 import { User } from './models/UserModel';
 
 const jwt = require('jsonwebtoken');
@@ -47,7 +48,7 @@ export const socketServer = (function () {
         init: (server: any) => {
             instance.io = new Server(server, {
                 cors: {
-                    origin: '*',
+                    origin: buildAllowedOrigins(),
                     methods: ['PUT', 'GET', 'POST', 'DELETE', 'OPTIONS'],
                     allowedHeaders: ['secretHeader', 'Authorization'],
                     credentials: true,

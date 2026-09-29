@@ -27,6 +27,7 @@ const gamificationRoute = require('./src/routes/gamificationRoute');
 const notificationRoute = require('./src/routes/notificationRoute');
 const fundRoute = require('./src/routes/fundRoute');
 const telegramRoute = require('./src/routes/telegramRoute');
+const adminAuditRoute = require('./src/routes/adminAuditRoute');
 import { observabilityService } from './src/services/observabilityService';
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
@@ -105,6 +106,7 @@ app.use('/api/v1/upload', uploadRoute);
 app.use('/api/v1/search', searchRoute);
 app.use('/api/v1/telegram', telegramRoute);
 app.use('/api/v1/telemetry', telegramRoute);
+app.use('/api/v1/admin', adminAuditRoute);
 
 // Register documentation before the catch-all 404 handler. Previously this
 // function ran inside the listen callback, after the wildcard route had

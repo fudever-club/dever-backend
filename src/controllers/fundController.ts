@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { FundCampaign } from '../models/FundCampaignModel';
 import { FundPayment } from '../models/FundPaymentModel';
 import { FundAuditLog } from '../models/FundAuditLogModel';
+import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { User } from '../models/UserModel';
 import { sendTelegramMessage } from '../services/telegramService';
 
@@ -23,35 +24,19 @@ const recordFundAudit = (
 };
 
 /**
- * 1. Get currently active fund campaign for member client
+ * 1. Get currently active fund campaign for member client (read-only).
+ * Never lazy-create: campaign creation is an admin-only write via
+ * POST /admin/campaigns. A GET must not mint bank-info records.
  */
 export const getActiveCampaign = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-        let campaign = await FundCampaign.findOne({ status: 'active' }).sort({ createdAt: -1 });
+        const campaign = await FundCampaign.findOne({ status: 'active' }).sort({ createdAt: -1 });
 
-        // If no active campaign exists, create a default one for the current semester
         if (!campaign) {
-            const nextMonth = new Date();
-            nextMonth.setDate(nextMonth.getDate() + 30);
-
-            campaign = await FundCampaign.create({
-                title: 'Quỹ Hoạt Động & Phát Triển CLB FU-DEVER Kỳ Fall 2026',
-                description: 'Phục vụ hoạt động sinh hoạt định kỳ, teambuilding, mua sắm thiết bị phần cứng Project Lab và tài trợ giải thưởng giải thuật LeetCode.',
-                amount: 100000,
-                startDate: new Date(),
-                deadline: nextMonth,
-                semester: 'Fall 2026',
-                status: 'active',
-                bankInfo: {
-                    bankName: 'TPBank (Ngân hàng Tiên Phong)',
-                    bankCode: 'TPB',
-                    accountNumber: '81836101820',
-                    accountHolder: 'NGUYEN THI NGOC ANH',
-                    transferSyntaxTemplate: 'DEVER [MSSV] [HoTen]',
-                    qrTemplateUrl: 'https://img.vietqr.io/image/TPB-81836101820-compact2.png?amount=100000&addInfo=DEVER%20MSSV%20HoTen&accountName=NGUYEN%20THI%20NGOC%20ANH',
-                    customQrUrl: '/images/treasurer-qr.png',
-                },
-                targetTotalAmount: 5000000,
+            return res.status(404).json({
+                status: 'error',
+                message: 'Hiện chưa có kỳ thu quỹ nào đang hoạt động',
+                data: null,
             });
         }
 
@@ -407,6 +392,16 @@ export const reviewAdminPayment = async (req: Request, res: Response, next: Next
             actorId: adminId || null,
             amount: payment.amount,
             note: reviewNotes || '',
+        });
+        recordAdminAudit({
+            actorId: adminId || null,
+            action: status === 'approved' ? 'fund.payment_approved' : 'fund.payment_rejected',
+            targetType: 'fund_payment',
+            targetId: String(payment._id),
+            summary: `Payment ${String(payment._id)} ${status} amount ${payment.amount}`.slice(0, 500),
+            before: undefined,
+            after: { status },
+            ip: req.ip || '',
         });
 
         return res.status(200).json({

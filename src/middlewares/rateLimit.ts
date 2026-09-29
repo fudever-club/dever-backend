@@ -34,8 +34,9 @@ cleanupTimer.unref();
 
 /**
  * Zero-dependency in-memory sliding-window rate limiter.
- * Suitable for a single Node process; use a shared store (e.g. Redis)
- * if the API ever runs behind multiple instances.
+ * Suitable for a single Node process.
+ * TODO: replace with a shared store (e.g. Redis) if the API ever runs
+ * behind multiple instances — per-process budgets do not compose.
  */
 export const rateLimit = (options: RateLimitOptions) => {
     const { windowMs, max, message } = options;
@@ -63,7 +64,7 @@ export const rateLimit = (options: RateLimitOptions) => {
 /** Brute-force guard for password login (per IP). */
 export const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 30,
+    max: 10,
     message: 'Too many login attempts, please try again later',
 });
 
@@ -86,6 +87,13 @@ export const errorReportLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
     message: 'Too many requests, please try again later',
+});
+
+/** Blog likes mutate counts and bust the blogs cache — bound toggle spam. */
+export const blogLikeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: 'Too many like attempts, please try again later',
 });
 
 /** LeetCode sync fans out to an external API per user — expensive. */

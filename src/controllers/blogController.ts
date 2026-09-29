@@ -5,6 +5,7 @@ import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
 import { invalidateCache } from '../services/cacheService';
 import { sanitizeBlogHtml, sanitizePlainText } from '../Utils/sanitize';
+import { recordAdminAudit } from '../models/AdminAuditLogModel';
 
 const escapeRegExp = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
@@ -183,7 +184,9 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
                 title: 'Có bài viết mới gửi duyệt 📝',
                 message: `Thành viên ${authorName} vừa gửi bài viết "${blog.title}" lên hàng đợi duyệt.`,
                 link: '/vi/blog-management',
-                meta: { blog, author: { name: authorName, email: (authorUser as any)?.email } },
+                // Identifier-only meta: never persist the full blog doc or
+                // the author's email in the notification record.
+                meta: { blogId: blog._id.toString(), blogTitle: blog.title, authorName },
                 sendTelegram: true,
             }).catch((e) => console.warn('[Blog Notification Trigger Error]:', e));
         }
@@ -363,6 +366,16 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
         if (!blog) {
             return res.status(404).json({ status: 'error', message: 'Blog not found' });
         }
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'blog.reviewed',
+            targetType: 'blog',
+            targetId: String(blog._id),
+            summary: String(blog.title || '').slice(0, 120),
+            before: undefined,
+            after: { status },
+            ip: req.ip || '',
+        });
 
         // Handle Notifications, EXP rewards, and Telegram alerts based on status
         if (blog.authorId) {
@@ -382,7 +395,9 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
                     title: 'Bài viết của bạn đã được xuất bản! 🎉',
                     message: `Bài viết "${blog.title}" đã được duyệt thành công (+100 EXP và Huy hiệu Tác giả).`,
                     link: `/blog/${blog.slug}`,
-                    meta: { blog, status, reviewNotes },
+                    // Identifier-only meta: blogSlug is the public locator
+                    // Telegram needs for the approved-post URL.
+                    meta: { blogId: blog._id.toString(), blogTitle: blog.title, blogSlug: blog.slug, status, reviewNotes },
                     sendTelegram: true,
                 }).catch((e) => console.warn('[Review Notification Error]:', e));
             } else if (status === 'changes_requested') {
@@ -392,7 +407,7 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
                     title: 'Yêu cầu chỉnh sửa bài viết ⚠️',
                     message: `Bài viết "${blog.title}" cần chỉnh sửa: ${reviewNotes || 'Vui lòng kiểm tra lại nội dung.'}`,
                     link: '/vi/create-blog',
-                    meta: { blog, status, reviewNotes },
+                    meta: { blogId: blog._id.toString(), blogTitle: blog.title, blogSlug: blog.slug, status, reviewNotes },
                     sendTelegram: true,
                 }).catch((e) => console.warn('[Review Notification Error]:', e));
             } else if (status === 'rejected') {
@@ -402,7 +417,7 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
                     title: 'Bài viết không được phê duyệt ❌',
                     message: `Bài viết "${blog.title}" đã bị từ chối: ${reviewNotes || 'Nội dung chưa phù hợp tiêu chuẩn.'}`,
                     link: '/vi/create-blog',
-                    meta: { blog, status, reviewNotes },
+                    meta: { blogId: blog._id.toString(), blogTitle: blog.title, blogSlug: blog.slug, status, reviewNotes },
                     sendTelegram: true,
                 }).catch((e) => console.warn('[Review Notification Error]:', e));
             }
@@ -422,26 +437,29 @@ export const reviewBlog = async (req: Request, res: Response, next: NextFunction
 
 export const likeBlog = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // Likes are identity-bound: anonymous +1 allowed unbounded inflation
+        // and cache-busting with no dedup key. Honest 401 for anonymous.
         const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication required' });
+        }
         const blog = await Blog.findById(req.params.id);
         if (!blog) {
             return res.status(404).json({ status: 'error', message: 'Blog not found' });
         }
 
+        if (!Array.isArray(blog.likedUsers)) {
+            blog.likedUsers = [];
+        }
+        const index = blog.likedUsers.findIndex((id: any) => id.toString() === userId.toString());
         let isLiked = false;
-        if (userId && Array.isArray(blog.likedUsers)) {
-            const index = blog.likedUsers.findIndex((id: any) => id.toString() === userId.toString());
-            if (index > -1) {
-                blog.likedUsers.splice(index, 1);
-                blog.likes = Math.max(0, blog.likes - 1);
-                isLiked = false;
-            } else {
-                blog.likedUsers.push(userId);
-                blog.likes += 1;
-                isLiked = true;
-            }
+        if (index > -1) {
+            blog.likedUsers.splice(index, 1);
+            blog.likes = Math.max(0, (blog.likes ?? 0) - 1);
+            isLiked = false;
         } else {
-            blog.likes += 1;
+            blog.likedUsers.push(userId);
+            blog.likes = (blog.likes ?? 0) + 1;
             isLiked = true;
         }
 

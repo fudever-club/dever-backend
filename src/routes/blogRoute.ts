@@ -13,6 +13,7 @@ import {
     likeBlog,
 } from '../controllers/blogController';
 import { requireAdmin, requireAuth, optionalAuth } from '../middlewares/auth';
+import { blogLikeLimiter } from '../middlewares/rateLimit';
 import { cacheRoute } from '../services/cacheService';
 
 const Router = express.Router();
@@ -24,7 +25,7 @@ Router.route('/admin/review-queue').get(requireAuth, requireAdmin, getReviewQueu
 Router.route('/slug/:slug').get(optionalAuth, cacheRoute(60, 'blogs'), getBlogBySlug);
 Router.route('/:id/review').patch(requireAuth, requireAdmin, reviewBlog);
 Router.route('/:id/toggle-featured').patch(requireAuth, requireAdmin, toggleFeaturedBlog);
-Router.route('/:id/like').put(optionalAuth, likeBlog);
+Router.route('/:id/like').put(blogLikeLimiter, requireAuth, likeBlog);
 Router.route('/:id').put(requireAuth, updateBlog).delete(requireAuth, deleteBlog);
 
 module.exports = Router;

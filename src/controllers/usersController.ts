@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { User } from '../models/UserModel';
 import { Leaderboard } from '../models/LeaderboardModel';
 import { Position } from '../models/PositionModel';
+import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto, toPublicProfileKey, toPublicUserDto } from '../Utils/userDto';
 import { PRESIDENT_POSITION, VICE_PRESIDENT_POSITION } from '../middlewares/auth';
 
@@ -409,8 +410,19 @@ export const setUserAdminRole = async (req: Request, res: Response, next: NextFu
             });
         }
 
+        const oldIsAdmin = user.isAdmin;
         user.isAdmin = requestedAdmin;
         await user.save();
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: requestedAdmin ? 'user.role_granted' : 'user.role_revoked',
+            targetType: 'user',
+            targetId: req.params.userId,
+            summary: `Admin role ${requestedAdmin ? 'granted' : 'revoked'} for user ${req.params.userId}`.slice(0, 500),
+            before: { isAdmin: oldIsAdmin },
+            after: { isAdmin: requestedAdmin },
+            ip: req.ip || '',
+        });
         return res.status(200).json({
             status: 'success',
             message: requestedAdmin ? 'Administrator access granted' : 'Administrator access revoked',
@@ -448,9 +460,24 @@ export const setUserPosition = async (req: Request, res: Response, next: NextFun
             }
         }
 
+        const oldPositionId = (currentPosition as any)?._id
+            ? String((currentPosition as any)._id)
+            : currentPosition
+              ? String(currentPosition)
+              : null;
         user.positionId = nextPosition._id;
         if (isPresidentPosition(nextPosition)) user.isAdmin = true;
         await user.save();
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'user.position_changed',
+            targetType: 'user',
+            targetId: req.params.userId,
+            summary: `Position changed for user ${req.params.userId}`.slice(0, 500),
+            before: { positionId: oldPositionId },
+            after: { positionId: String(nextPosition._id) },
+            ip: req.ip || '',
+        });
         await user.populate('positionId');
         return res.status(200).json({ status: 'success', message: 'Position updated successfully', data: toPrivateUserDto(user) });
     } catch (error) {
@@ -464,8 +491,19 @@ export const setUserTeamLeadership = async (req: Request, res: Response, next: N
         if (typeof isLeader !== 'boolean') {
             return res.status(400).json({ status: 'error', message: 'isLeader must be a boolean' });
         }
+        const prevUser = await User.findById(req.params.userId).select('isLeader');
         const user = await User.findByIdAndUpdate(req.params.userId, { isLeader }, { new: true, runValidators: true });
         if (!user) return res.status(404).json({ status: 'error', message: 'Member not found' });
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'user.leadership_changed',
+            targetType: 'user',
+            targetId: req.params.userId,
+            summary: `Team leadership ${isLeader ? 'assigned' : 'removed'} for user ${req.params.userId}`.slice(0, 500),
+            before: { isLeader: prevUser ? prevUser.isLeader : null },
+            after: { isLeader: user.isLeader },
+            ip: req.ip || '',
+        });
         return res.status(200).json({
             status: 'success',
             message: isLeader ? 'Team leadership assigned' : 'Team leadership removed',
@@ -513,6 +551,21 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
             });
         }
         await User.findByIdAndDelete(req.params.userId);
+        const deletedPositionId = (user.positionId as any)?._id
+            ? String((user.positionId as any)._id)
+            : user.positionId
+              ? String(user.positionId)
+              : null;
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'user.deleted',
+            targetType: 'user',
+            targetId: req.params.userId,
+            summary: `User ${req.params.userId} deleted`.slice(0, 500),
+            before: deletedPositionId ? { positionId: deletedPositionId } : undefined,
+            after: undefined,
+            ip: req.ip || '',
+        });
         return res.status(200).json({ status: 'success', message: 'Member deleted successfully' });
     } catch (error) {
         return next(error);
@@ -531,6 +584,16 @@ export const resetPasword = async (req: Request, res: Response, next: NextFuncti
         }
         user.password = temporaryPassword;
         await user.save();
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'user.password_reset',
+            targetType: 'user',
+            targetId: req.params.userId,
+            summary: `Password reset for user ${req.params.userId}`.slice(0, 500),
+            before: undefined,
+            after: { reset: true },
+            ip: req.ip || '',
+        });
         return res.status(200).json({
             status: 'success',
             data: { temporaryPassword },

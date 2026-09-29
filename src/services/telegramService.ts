@@ -47,10 +47,10 @@ export const sendTelegramMessage = async (
  * 1. Alert Admin when a new Tech Blog is submitted for review
  */
 export const notifyAdminNewBlogSubmission = async (blog: any, author: any) => {
-    const authorName = author ? [author.firstname, author.lastname].filter(Boolean).join(' ') || author.nickname || author.email : 'Thành viên DEVER';
+    const authorName = author ? [author.firstname, author.lastname].filter(Boolean).join(' ') || author.nickname || author.name || author.email : 'Thành viên DEVER';
     const authorEmail = author?.email ? ` (${author.email})` : '';
-    const category = blog.category || 'Tech Blog';
-    const tags = Array.isArray(blog.tags) && blog.tags.length > 0 ? blog.tags.map((t: string) => `#${t}`).join(' ') : '#DEVER_Blog';
+    const category = blog?.category || 'Tech Blog';
+    const tags = Array.isArray(blog?.tags) && blog.tags.length > 0 ? blog.tags.map((t: string) => `#${t}`).join(' ') : '#DEVER_Blog';
     const adminUrl = process.env.ADMIN_URL || 'https://admin.fudever.com';
     const landingUrl = process.env.LANDING_URL || 'https://fudever.com';
     const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
@@ -60,11 +60,11 @@ export const notifyAdminNewBlogSubmission = async (blog: any, author: any) => {
     const message = `
 📝 <b>[FU-DEVER TECH BLOG] CÓ BÀI VIẾT MỚI GỬI DUYỆT!</b>
 
-📌 <b>Tiêu đề:</b> ${blog.title || 'Bài viết không tên'}
+📌 <b>Tiêu đề:</b> ${blog?.title || 'Bài viết không tên'}
 👤 <b>Tác giả:</b> ${authorName}${authorEmail}
 🏷️ <b>Chuyên mục:</b> ${category}
 🔖 <b>Tags:</b> ${tags}
-⏱️ <b>Thời gian đọc:</b> ${blog.readTime || '5 phút đọc'}
+⏱️ <b>Thời gian đọc:</b> ${blog?.readTime || '5 phút đọc'}
 📅 <b>Gửi lúc:</b> ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
 
 👉 <a href="${reviewUrl}"><b>BẤM VÀO ĐÂY ĐỂ DUYỆT BÀI NGAY TRÊN ADMIN DASHBOARD</b></a>
@@ -83,13 +83,13 @@ export const notifyBlogReviewResult = async (blog: any, status: string, reviewNo
     const landingUrl = process.env.LANDING_URL || 'https://fudever.com';
     const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
     const blogUrl = isApproved
-        ? `${landingUrl}/blog/${blog.slug}`
+        ? `${landingUrl}/blog/${blog?.slug}`
         : `${clientUrl}/vi/create-blog`;
 
     const message = `
 🔔 <b>[FU-DEVER TECH BLOG] KẾT QUẢ DUYỆT BÀI VIẾT</b>
 
-📌 <b>Tiêu đề:</b> ${blog.title}
+📌 <b>Tiêu đề:</b> ${blog?.title}
 🎯 <b>Trạng thái mới:</b> <b>${statusText}</b>
 ${reviewNotes ? `💬 <b>Ghi chú từ Admin:</b> <i>${reviewNotes}</i>\n` : ''}
 ${isApproved ? `🎁 <b>Phần thưởng:</b> +100 EXP & Mở khóa Huy hiệu Tác giả!\n` : ''}
@@ -103,7 +103,7 @@ ${isApproved ? `🎁 <b>Phần thưởng:</b> +100 EXP & Mở khóa Huy hiệu T
  * 3. Alert when a member achieves a major Gamification milestone
  */
 export const notifyGamificationMilestone = async (user: any, milestoneInfo: { badgeTitle?: string; level?: number; streak?: number }) => {
-    const userName = [user?.firstname, user?.lastname].filter(Boolean).join(' ') || user?.nickname || 'Thành viên DEVER';
+    const userName = [user?.firstname, user?.lastname].filter(Boolean).join(' ') || user?.nickname || user?.name || 'Thành viên DEVER';
     const clientUrl = process.env.CLIENT_URL || 'https://client.fudever.com';
 
     let detail = '';

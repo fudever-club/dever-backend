@@ -5,6 +5,7 @@ import { User } from '../models/UserModel';
 import { toPublicProfileKey } from '../Utils/userDto';
 import { createNotification } from '../services/notificationService';
 import { sendTelegramMessage, notifyAdminNewOpenSourceSubmission } from '../services/telegramService';
+import { recordAdminAudit } from '../models/AdminAuditLogModel';
 
 // Stored URLs render as anchors — only http(s), otherwise stored XSS/phishing.
 const isSafeHttpUrl = (value: unknown): value is string =>
@@ -146,7 +147,8 @@ export const submitOpenSourceProject = async (req: Request, res: Response, next:
             title: 'Dự án Open Source mới gửi duyệt 💻',
             message: `Thành viên ${authorName} vừa gửi dự án "${title}" lên hàng đợi duyệt.`,
             link: '/vi/community-content?tab=opensource&filter=pending',
-            meta: { project },
+            // Identifier-only meta: never persist the full project doc.
+            meta: { projectId: project._id.toString(), projectTitle: project.title },
             sendTelegram: false,
         }).catch(() => {});
 
@@ -175,8 +177,20 @@ export const updateOpenSourceProject = async (req: Request, res: Response, next:
         if (description !== undefined) updateData.description = description;
         if (author !== undefined) updateData.author = author;
         if (stars !== undefined) updateData.stars = Number(stars);
-        if (githubUrl !== undefined) updateData.githubUrl = githubUrl;
-        if (demoUrl !== undefined) updateData.demoUrl = demoUrl;
+        // Same http(s) guard as the create path — stored URLs render as
+        // anchors, so javascript:/data: schemes would be stored XSS.
+        if (githubUrl !== undefined) {
+            if (!isSafeHttpUrl(githubUrl)) {
+                return res.status(400).json({ status: 'error', message: 'githubUrl must be an http(s) URL' });
+            }
+            updateData.githubUrl = githubUrl;
+        }
+        if (demoUrl !== undefined) {
+            if (typeof demoUrl === 'string' && demoUrl.trim() !== '' && !isSafeHttpUrl(demoUrl)) {
+                return res.status(400).json({ status: 'error', message: 'demoUrl must be an http(s) URL' });
+            }
+            updateData.demoUrl = demoUrl;
+        }
         if (category !== undefined) updateData.category = category;
         if (tags !== undefined) {
             updateData.tags = Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()) : [];
@@ -203,7 +217,19 @@ export const updateOpenSourceProject = async (req: Request, res: Response, next:
                     title: 'Dự án của bạn đã được xuất bản! 🌟',
                     message: `Dự án "${oldProject.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
                     link: '/discover',
-                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: userAuthor },
+                    // Identifier-only meta: never persist full project/user docs.
+                    meta: {
+                        projectId: oldProject._id.toString(),
+                        projectTitle: oldProject.title,
+                        milestone: { badgeTitle: 'Core Contributor' },
+                        userId: oldProject.authorId.toString(),
+                        userName:
+                            [(userAuthor as any).firstname, (userAuthor as any).lastname]
+                                .filter(Boolean)
+                                .join(' ') ||
+                            (userAuthor as any).nickname ||
+                            'Thành viên DEVER',
+                    },
                     sendTelegram: true,
                 }).catch(() => {});
             }
@@ -253,6 +279,16 @@ export const approveOpenSourceProject = async (req: Request, res: Response, next
         const wasPublished = project.isPublished;
         project.isPublished = true;
         await project.save();
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'opensource.approved',
+            targetType: 'open_source',
+            targetId: String(project._id),
+            summary: String((project as any).title || '').slice(0, 120),
+            before: { isPublished: wasPublished },
+            after: { isPublished: true },
+            ip: req.ip || '',
+        });
 
         if (!wasPublished && project.authorId) {
             const author = await User.findById(project.authorId);
@@ -271,7 +307,17 @@ export const approveOpenSourceProject = async (req: Request, res: Response, next
                     title: 'Dự án của bạn đã được xuất bản! 🌟',
                     message: `Dự án "${project.title}" đã được duyệt (+150 EXP và mở khóa Huy hiệu Core Contributor).`,
                     link: '/discover',
-                    meta: { project, milestone: { badgeTitle: 'Core Contributor' }, user: author },
+                    // Identifier-only meta: never persist full project/user docs.
+                    meta: {
+                        projectId: project._id.toString(),
+                        projectTitle: project.title,
+                        milestone: { badgeTitle: 'Core Contributor' },
+                        userId: project.authorId.toString(),
+                        userName:
+                            [(author as any).firstname, (author as any).lastname].filter(Boolean).join(' ') ||
+                            (author as any).nickname ||
+                            'Thành viên DEVER',
+                    },
                     sendTelegram: true,
                 }).catch(() => {});
             }
@@ -297,8 +343,19 @@ export const rejectOpenSourceProject = async (req: Request, res: Response, next:
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy dự án' });
         }
 
+        const wasPublishedReject = project.isPublished;
         project.isPublished = false;
         await project.save();
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'opensource.rejected',
+            targetType: 'open_source',
+            targetId: String(project._id),
+            summary: String((project as any).title || '').slice(0, 120),
+            before: { isPublished: wasPublishedReject },
+            after: { isPublished: false },
+            ip: req.ip || '',
+        });
 
         return res.status(200).json({
             status: 'success',

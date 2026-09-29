@@ -187,7 +187,12 @@ export const downloadResource = async (req: Request, res: Response, next: NextFu
                 }
             }
 
-            // 3. Fallback: redirect to external URL
+            // 3. Fallback: redirect to external URL — only for http(s)
+            // targets. A stored javascript:/data: URL would otherwise turn
+            // this endpoint into an open-redirect/XSS gadget.
+            if (!isExternalUrl(resource.fileUrl)) {
+                return res.status(400).json({ status: 'error', message: 'Tài liệu có liên kết ngoài không hợp lệ' });
+            }
             return res.redirect(resource.fileUrl);
         }
 
@@ -242,6 +247,14 @@ export const updateResource = async (req: Request, res: Response, next: NextFunc
         const updates: Record<string, unknown> = {};
         for (const field of allowedUpdates) {
             if (req.body && req.body[field] !== undefined) {
+                // Same http(s) guard as the create path — fileUrl either
+                // serves a download or renders as a link.
+                if (field === 'fileUrl' && !isExternalUrl(req.body[field])) {
+                    return res.status(400).json({
+                        status: 'error',
+                        message: 'fileUrl must be a valid http(s) URL',
+                    });
+                }
                 updates[field] = req.body[field];
             }
         }
