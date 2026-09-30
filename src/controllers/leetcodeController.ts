@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 import _ from 'lodash';
 import { Leaderboard } from '../models/LeaderboardModel';
 import { User } from '../models/UserModel';
+import { refreshQuestionDifficulties } from './seasonController';
 import { toPublicProfileKey } from '../Utils/userDto';
 import { getJwtSecret } from '../config/auth';
 import { invalidateCache } from '../services/cacheService';
@@ -195,6 +196,21 @@ export const updateLeaderboard = async (req: Request, res: Response, next: NextF
         });
 
         await Promise.all(updatePromises.filter(Boolean));
+
+        // Refresh cached question difficulties for arena season scoring.
+        // Bounded + best-effort: a cache miss never fails the sync.
+        try {
+            const users = await Leaderboard.find({}).select('acSubmissionList');
+            const slugs: string[] = [];
+            for (const entry of users as any[]) {
+                for (const sub of entry.acSubmissionList || []) {
+                    if (sub?.titleSlug) slugs.push(sub.titleSlug);
+                }
+            }
+            await refreshQuestionDifficulties(slugs);
+        } catch (e) {
+            console.error('Difficulty cache refresh error:', e);
+        }
 
         invalidateCache('leetcode');
 

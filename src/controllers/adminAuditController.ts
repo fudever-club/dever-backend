@@ -19,6 +19,9 @@ const ADMIN_AUDIT_ACTIONS = [
     'user.invited',
     'user.accepted',
     'user.invite_revoked',
+    'season.created',
+    'season.updated',
+    'season.ended',
 ];
 
 const ADMIN_AUDIT_TARGET_TYPES = [
@@ -30,6 +33,7 @@ const ADMIN_AUDIT_TARGET_TYPES = [
     'project',
     'campaign',
     'position',
+    'season',
 ];
 
 /**

@@ -21,7 +21,10 @@ export type AdminAuditAction =
     | 'opensource.deleted'
     | 'user.invited'
     | 'user.accepted'
-    | 'user.invite_revoked';
+    | 'user.invite_revoked'
+    | 'season.created'
+    | 'season.updated'
+    | 'season.ended';
 
 export type AdminAuditTargetType =
     | 'user'
@@ -31,7 +34,8 @@ export type AdminAuditTargetType =
     | 'event'
     | 'project'
     | 'campaign'
-    | 'position';
+    | 'position'
+    | 'season';
 
 export interface IAdminAuditLog extends Document {
     actorId: mongoose.Types.ObjectId | null;
@@ -67,12 +71,15 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
                 'user.invited',
                 'user.accepted',
                 'user.invite_revoked',
+                'season.created',
+                'season.updated',
+                'season.ended',
             ],
             required: true,
         },
         targetType: {
             type: String,
-            enum: ['user', 'fund_payment', 'blog', 'open_source', 'event', 'project', 'campaign', 'position'],
+            enum: ['user', 'fund_payment', 'blog', 'open_source', 'event', 'project', 'campaign', 'position', 'season'],
             required: true,
             index: true,
         },
