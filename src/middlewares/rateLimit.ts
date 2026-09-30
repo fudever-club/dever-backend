@@ -96,6 +96,13 @@ export const blogLikeLimiter = rateLimit({
     message: 'Too many like attempts, please try again later',
 });
 
+/** Public invite validate/accept: strict budget so tokens cannot be enumerated. */
+export const inviteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: 'Too many invite attempts, please try again later',
+});
+
 /** LeetCode sync fans out to an external API per user — expensive. */
 export const leetcodeUpdateLimiter = rateLimit({
     windowMs: 10 * 60 * 1000,

@@ -16,6 +16,9 @@ const ADMIN_AUDIT_ACTIONS = [
     'opensource.approved',
     'opensource.rejected',
     'opensource.deleted',
+    'user.invited',
+    'user.accepted',
+    'user.invite_revoked',
 ];
 
 const ADMIN_AUDIT_TARGET_TYPES = [

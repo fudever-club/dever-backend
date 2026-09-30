@@ -28,6 +28,7 @@ const notificationRoute = require('./src/routes/notificationRoute');
 const fundRoute = require('./src/routes/fundRoute');
 const telegramRoute = require('./src/routes/telegramRoute');
 const adminAuditRoute = require('./src/routes/adminAuditRoute');
+const inviteRoute = require('./src/routes/inviteRoute');
 import { observabilityService } from './src/services/observabilityService';
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
@@ -95,6 +96,7 @@ app.get('/ready', (_req, res) => {
 app.use('/', authRoute);
 app.use('/api/v1/auth', authRoute);
 app.use('/api/v1/users', usersRoute);
+app.use('/api/v1/invites', inviteRoute);
 app.use('/api/v1/edit-profile', profileRoute);
 
 app.use('/api/v1/social', socialRoute);

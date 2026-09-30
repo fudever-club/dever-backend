@@ -18,7 +18,10 @@ export type AdminAuditAction =
     | 'blog.reviewed'
     | 'opensource.approved'
     | 'opensource.rejected'
-    | 'opensource.deleted';
+    | 'opensource.deleted'
+    | 'user.invited'
+    | 'user.accepted'
+    | 'user.invite_revoked';
 
 export type AdminAuditTargetType =
     | 'user'
@@ -61,6 +64,9 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
                 'opensource.approved',
                 'opensource.rejected',
                 'opensource.deleted',
+                'user.invited',
+                'user.accepted',
+                'user.invite_revoked',
             ],
             required: true,
         },
