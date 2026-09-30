@@ -7,16 +7,19 @@ import {
     getAdminPayments,
     getFundAnalytics,
     getMyFundPayments,
+    getPublicFundStats,
     reviewAdminPayment,
     submitFundPayment,
     updateAdminCampaign,
 } from '../controllers/fundController';
 import { optionalAuth, requireAdmin, requireAuth } from '../middlewares/auth';
+import { cacheRoute } from '../services/cacheService';
 
 const router = express.Router();
 
 // Public & Member Routes
 router.get('/active-campaign', optionalAuth, getActiveCampaign);
+router.get('/public-stats', cacheRoute(60, 'funds'), getPublicFundStats);
 router.get('/my-payments', requireAuth, getMyFundPayments);
 router.post('/submit-payment', requireAuth, submitFundPayment);
 

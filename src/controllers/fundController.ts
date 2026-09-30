@@ -4,6 +4,7 @@ import { FundPayment } from '../models/FundPaymentModel';
 import { FundAuditLog } from '../models/FundAuditLogModel';
 import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { User } from '../models/UserModel';
+import { invalidateCache } from '../services/cacheService';
 import mongoose from 'mongoose';
 import { sendTelegramMessage } from '../services/telegramService';
 import { asSingleStringParam, rejectNoSql } from '../Utils/noSqlGuard';
@@ -181,6 +182,8 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
             amount: payableAmount,
             note: note || '',
         });
+        invalidateCache('funds');
+        invalidateCache('funds');
 
         return res.status(201).json({
             status: 'success',
@@ -275,6 +278,7 @@ export const createAdminCampaign = async (req: Request, res: Response, next: Nex
             targetTotalAmount: Number(targetTotalAmount) || 5000000,
             createdBy: userId || null,
         });
+        invalidateCache('funds');
 
         return res.status(201).json({
             status: 'success',
@@ -332,6 +336,7 @@ export const updateAdminCampaign = async (req: Request, res: Response, next: Nex
         if (!updated) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy kỳ thu quỹ' });
         }
+        invalidateCache('funds');
         return res.status(200).json({
             status: 'success',
             message: 'Cập nhật kỳ thu quỹ thành công!',
@@ -419,6 +424,7 @@ export const reviewAdminPayment = async (req: Request, res: Response, next: Next
             amount: payment.amount,
             note: reviewNotes || '',
         });
+        invalidateCache('funds');
         recordAdminAudit({
             actorId: adminId || null,
             action: status === 'approved' ? 'fund.payment_approved' : 'fund.payment_rejected',
@@ -532,6 +538,56 @@ export const getFundAnalytics = async (_req: Request, res: Response, next: NextF
                 totalRejected,
                 totalMoneyCollected,
                 completionPercent,
+            },
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * 11. Public fund transparency stats (aggregates only — no names, no bills,
+ * no per-member amounts). Cached 60s at the route; mutations above bust the
+ * 'funds' group. No active campaign -> honest 404 with null data.
+ */
+export const getPublicFundStats = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+        const campaign = await FundCampaign.findOne({ status: 'active' })
+            .select('title amount deadline semester status')
+            .sort({ createdAt: -1 })
+            .lean();
+        if (!campaign) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Hiện chưa có kỳ thu quỹ nào đang hoạt động',
+                data: null,
+            });
+        }
+        const [countRow, totalMembers] = await Promise.all([
+            FundPayment.aggregate([
+                { $match: { campaignId: campaign._id } },
+                {
+                    $group: {
+                        _id: null,
+                        paid: { $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] } },
+                    },
+                },
+            ]),
+            User.countDocuments({}),
+        ]);
+        const paidCount = countRow[0]?.paid ?? 0;
+        const percent = totalMembers > 0 ? Math.min(100, Math.round((paidCount / totalMembers) * 100)) : 0;
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                title: campaign.title,
+                amount: campaign.amount,
+                deadline: campaign.deadline,
+                semester: (campaign as any).semester || null,
+                paidCount,
+                totalMembers,
+                percent,
+                totalMoneyCollected: paidCount * campaign.amount,
             },
         });
     } catch (error) {
