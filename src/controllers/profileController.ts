@@ -108,6 +108,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
         }
         user.password = newPassword;
         await user.save();
+        await User.findByIdAndUpdate(userId, { $set: { mustChangePassword: false } });
         return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
     } catch (error) {
         return next(error);

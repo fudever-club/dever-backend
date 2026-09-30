@@ -120,6 +120,15 @@ export const submitFundPayment = async (req: Request, res: Response, next: NextF
         }
 
         const user = await User.findById(userId);
+        // Soft-block: temp-password holders must set their own password first.
+        // Existing members (no flag) are never affected.
+        if (user?.mustChangePassword) {
+            return res.status(403).json({
+                status: 'error',
+                code: 'PASSWORD_CHANGE_REQUIRED',
+                message: 'Vui lòng đổi mật khẩu tạm thời trước khi nộp minh chứng',
+            });
+        }
         const userName = user ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.nickname || 'Thành viên DEVER' : 'Thành viên';
         const userMSSV = user?.MSSV || 'N/A';
 

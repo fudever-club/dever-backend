@@ -291,6 +291,7 @@ export const acceptInvite = async (req: Request, res: Response, next: NextFuncti
             isAdmin: false,
             isLeader: false,
             tokenVersion: 0,
+            mustChangePassword: false,
             profileVisibility: DEFAULT_PROFILE_VISIBILITY,
         });
         invite.status = 'accepted';

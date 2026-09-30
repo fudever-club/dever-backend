@@ -53,7 +53,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         return res.status(200).json({
             status: 'success',
             data: {
-                user: { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId },
+                user: { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId, mustChangePassword: Boolean((user as any).mustChangePassword) },
                 token,
             },
         });

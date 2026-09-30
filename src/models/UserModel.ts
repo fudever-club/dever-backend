@@ -122,6 +122,13 @@ const userSchema = mongoose.Schema(
             // before the bump fail the version check in auth middleware.
             // Additive: legacy documents without the field read as 0.
         },
+        mustChangePassword: {
+            type: Boolean,
+            default: false,
+            // True only for accounts holding an admin-issued temporary
+            // password (manual/CSV provisioning, password reset). Existing
+            // members without this field read as falsy and are exempt.
+        },
         MSSV: {
             type: String,
             default: null,

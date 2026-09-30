@@ -51,6 +51,7 @@ const provisionMember = async (input: ProvisioningInput) => {
         password: temporaryPassword,
         isAdmin: false,
         isLeader: false,
+        mustChangePassword: true,
         profileVisibility: DEFAULT_PROFILE_VISIBILITY,
     });
 
@@ -344,6 +345,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
 
         user.password = newPassword;
         await user.save();
+        await User.findByIdAndUpdate(userId, { $set: { mustChangePassword: false } });
         return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
     } catch (error) {
         return next(error);
@@ -587,7 +589,10 @@ export const resetPasword = async (req: Request, res: Response, next: NextFuncti
         await user.save();
         // A fresh secret must kill every existing session: bump the token
         // version (access JWTs die in middleware) and revoke refresh chains.
-        await User.findByIdAndUpdate(req.params.userId, { $inc: { tokenVersion: 1 } });
+        await User.findByIdAndUpdate(req.params.userId, {
+            $inc: { tokenVersion: 1 },
+            $set: { mustChangePassword: true },
+        });
         await revokeAllSessions(req.params.userId);
         recordAdminAudit({
             actorId: res.locals.auth?.userId || null,

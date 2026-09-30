@@ -151,7 +151,15 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
             .replace(/(^-|-$)+/g, '');
         const slug = (baseSlug || 'post') + '-' + Date.now().toString(36);
 
-        const authorUser = await User.findById(userId).select('firstname lastname avatar positionId');
+        const authorUser = await User.findById(userId).select('firstname lastname avatar positionId mustChangePassword');
+        // Soft-block: temp-password holders must set their own password first.
+        if (authorUser?.mustChangePassword) {
+            return res.status(403).json({
+                status: 'error',
+                code: 'PASSWORD_CHANGE_REQUIRED',
+                message: 'Vui lòng đổi mật khẩu tạm thời trước khi gửi bài viết',
+            });
+        }
         const authorName = [authorUser?.firstname, authorUser?.lastname].filter(Boolean).join(' ') || 'Thành viên DEVER';
         const authorRole = isAdmin ? 'Ban Quản Trị' : 'Thành viên DEVER';
 
