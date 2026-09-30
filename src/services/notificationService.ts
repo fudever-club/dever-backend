@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Notification, INotification } from '../models/NotificationModel';
+import { User } from '../models/UserModel';
 import { socketServer } from '../socket';
 import { toNotificationDto } from '../Utils/notificationDto';
 import {
@@ -29,7 +30,18 @@ export interface CreateNotificationParams {
     sendTelegram?: boolean;
 }
 
-export const createNotification = async (params: CreateNotificationParams): Promise<INotification> => {
+/** Lifestyle categories a member may mute. Everything else is transactional
+ *  or operational and always delivers. */
+export const NOTIFICATION_MUTE_CATEGORIES: Record<string, 'arena' | 'event'> = {
+    badge_unlocked: 'arena',
+    level_up: 'arena',
+    streak_milestone: 'arena',
+    event_created: 'event',
+};
+
+export const NOTIFICATION_PREF_KEYS = ['arena', 'event'] as const;
+
+export const createNotification = async (params: CreateNotificationParams): Promise<INotification | null> => {
     const {
         recipientId = null,
         recipientRole = 'member',
@@ -40,6 +52,18 @@ export const createNotification = async (params: CreateNotificationParams): Prom
         meta = {},
         sendTelegram = false,
     } = params;
+
+    // Mutable lifestyle categories honor the recipient's opt-out. Transactional
+    // notices (review results, fund receipts, system alerts, admin ops) and
+    // role broadcasts always deliver. Legacy members without prefs read as on.
+    const gatedCategory = NOTIFICATION_MUTE_CATEGORIES[type];
+    if (recipientId && gatedCategory) {
+        const prefUser = await User.findById(recipientId).select('notificationPrefs');
+        const prefs = prefUser?.notificationPrefs as { arena?: boolean; event?: boolean } | undefined;
+        if (prefs && prefs[gatedCategory] === false) {
+            return null;
+        }
+    }
 
     const notification = await Notification.create({
         recipientId: recipientId ? new mongoose.Types.ObjectId(recipientId) : null,

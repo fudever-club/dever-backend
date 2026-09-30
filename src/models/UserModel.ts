@@ -129,6 +129,13 @@ const userSchema = mongoose.Schema(
             // password (manual/CSV provisioning, password reset). Existing
             // members without this field read as falsy and are exempt.
         },
+        notificationPrefs: {
+            // Mutable categories only. Transactional notices (review results,
+            // fund receipts, system alerts, admin ops) always deliver.
+            // Legacy documents without this field read as all-true.
+            arena: { type: Boolean, default: true },
+            event: { type: Boolean, default: true },
+        },
         MSSV: {
             type: String,
             default: null,

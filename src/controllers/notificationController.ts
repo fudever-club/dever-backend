@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Notification } from '../models/NotificationModel';
 import { NotificationRead } from '../models/NotificationReadModel';
+import { User } from '../models/UserModel';
+import { NOTIFICATION_PREF_KEYS } from '../services/notificationService';
 import { toNotificationDto } from '../Utils/notificationDto';
 import { testTelegramBotConnection } from '../services/telegramService';
 
@@ -190,6 +192,75 @@ export const deleteNotification = async (req: Request, res: Response, next: Next
         return res.status(200).json({
             status: 'success',
             message: 'Notification deleted successfully',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Get my notification preferences (mutable categories only; legacy members
+ * without stored prefs read as all-true).
+ */
+export const getMyNotificationPrefs = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication required' });
+        }
+        const user = await User.findById(userId).select('notificationPrefs');
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
+        const prefs = (user as any).notificationPrefs || {};
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                arena: prefs.arena !== false,
+                event: prefs.event !== false,
+            },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Update my notification preferences. Strict whitelist: only known keys,
+ * only booleans — never mass-assign req.body.
+ */
+export const updateMyNotificationPrefs = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Authentication required' });
+        }
+        const body = req.body || {};
+        const update: Record<string, boolean> = {};
+        for (const key of NOTIFICATION_PREF_KEYS) {
+            if (body[key] === undefined) continue;
+            if (typeof body[key] !== 'boolean') {
+                return res.status(400).json({
+                    status: 'error',
+                    code: 'VALIDATION_ERROR',
+                    message: `Preference '${key}' must be a boolean`,
+                });
+            }
+            update[`notificationPrefs.${key}`] = body[key];
+        }
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                code: 'VALIDATION_ERROR',
+                message: 'No valid preferences provided',
+            });
+        }
+        await User.findByIdAndUpdate(userId, { $set: update }, { runValidators: true });
+        const user = await User.findById(userId).select('notificationPrefs');
+        const prefs = (user as any)?.notificationPrefs || {};
+        return res.status(200).json({
+            status: 'success',
+            data: { arena: prefs.arena !== false, event: prefs.event !== false },
         });
     } catch (error) {
         next(error);

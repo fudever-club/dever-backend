@@ -117,3 +117,36 @@ export const getAdminAuditLog = async (req: Request, res: Response, next: NextFu
         return next(error);
     }
 };
+
+/**
+ * Admin-only action funnel: counts per action per day for the last N days.
+ * Powers BCN dashboards (submission -> review funnels, queue velocity)
+ * without paging through the raw log.
+ */
+export const getAdminAuditSummary = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const days = Math.min(Math.max(parseInt(req.query.days as string, 10) || 30, 1), 90);
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const rows = await AdminAuditLog.aggregate([
+            { $match: { createdAt: { $gte: since } } },
+            {
+                $group: {
+                    _id: {
+                        action: '$action',
+                        day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+                    },
+                    count: { $sum: 1 },
+                },
+            },
+            { $sort: { '_id.day': 1, '_id.action': 1 } },
+        ]);
+        const byAction: Record<string, number> = {};
+        const series = rows.map((row: any) => {
+            byAction[row._id.action] = (byAction[row._id.action] || 0) + row.count;
+            return { date: row._id.day, action: row._id.action, count: row.count };
+        });
+        return res.status(200).json({ status: 'success', data: { days, byAction, series } });
+    } catch (error) {
+        return next(error);
+    }
+};
