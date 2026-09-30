@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Resource } from '../models/ResourceModel';
 import { getFileFromStorage } from '../services/storageService';
 import { invalidateCache } from '../services/cacheService';
+import { asSingleStringParam, rejectNoSql } from '../Utils/noSqlGuard';
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -81,14 +82,21 @@ const SEED_RESOURCES = [
 
 export const getAllResources = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // ?category[$ne]=x parses to an object — 400 instead of silently
+        // dropping it, so operator probes are visible and never reach Mongo.
+        const categoryParam = asSingleStringParam(req.query.category);
+        const featuredParam = asSingleStringParam(req.query.featured);
+        if (categoryParam === null || featuredParam === null) {
+            return rejectNoSql(res);
+        }
         const filter: Record<string, any> = {};
-        if (req.query.featured === 'true') {
+        if (featuredParam === 'true') {
             filter.isFeatured = true;
-        } else if (req.query.featured === 'false') {
+        } else if (featuredParam === 'false') {
             filter.isFeatured = false;
         }
-        if (typeof req.query.category === 'string' && req.query.category.trim()) {
-            filter.category = new RegExp(escapeRegExp(req.query.category.trim()), 'i');
+        if (typeof categoryParam === 'string' && categoryParam.trim()) {
+            filter.category = new RegExp(escapeRegExp(categoryParam.trim()), 'i');
         }
 
         const resources = await Resource.find(filter).select('-fileData').sort({ createdAt: -1 });

@@ -14,11 +14,19 @@ export interface SearchResultItem {
   extra?: any;
 }
 
+import { asSingleStringParam, rejectNoSql } from '../Utils/noSqlGuard';
+
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const globalSearch = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawQuery = (req.query.q as string || '').trim();
+    // qs extended parser turns ?q[$ne]=x into an object — reject it with
+    // 400 instead of coercing/throwing, so operators never reach Mongo.
+    const qParam = asSingleStringParam(req.query.q);
+    if (qParam === null) {
+      return rejectNoSql(res);
+    }
+    const rawQuery = (qParam || '').trim();
     if (!rawQuery) {
       return res.status(200).json({
         status: 'success',

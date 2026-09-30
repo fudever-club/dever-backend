@@ -82,5 +82,9 @@ const notificationSchema = new Schema<INotification>(
 
 notificationSchema.index({ recipientId: 1, isRead: 1, createdAt: -1 });
 notificationSchema.index({ recipientRole: 1, isRead: 1, createdAt: -1 });
+// Visibility $or (recipientId / recipientRole) + sort({ createdAt: -1 })
+// does not filter isRead (receipts moved to NotificationRead), so the pure
+// recipient compound is needed for the inbox sort.
+notificationSchema.index({ recipientId: 1, createdAt: -1 });
 
 export const Notification = mongoose.model<INotification>('Notification', notificationSchema);

@@ -81,10 +81,21 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
 adminAuditLogSchema.index({ createdAt: -1 });
 adminAuditLogSchema.index({ action: 1, createdAt: -1 });
 adminAuditLogSchema.index({ targetType: 1, createdAt: -1 });
+// GET /admin/audit filters ?actorId=... + sort({ createdAt: -1 }).
+adminAuditLogSchema.index({ actorId: 1, createdAt: -1 });
 
 export const AdminAuditLog = mongoose.model<IAdminAuditLog>('AdminAuditLog', adminAuditLogSchema);
 
 /** Best-effort audit write: a logging failure must never fail the admin flow. */
+let adminAuditWriteFailCount = 0;
+let lastAdminAuditWriteError = '';
+
+/** In-memory fail counter for future alert scraping (log line below is the scrape target). */
+export const getAdminAuditWriteFailStats = () => ({
+    count: adminAuditWriteFailCount,
+    lastErr: lastAdminAuditWriteError,
+});
+
 export const recordAdminAudit = (
     entry: {
         actorId: unknown;
@@ -98,6 +109,10 @@ export const recordAdminAudit = (
     },
 ): void => {
     AdminAuditLog.create(entry as any).catch((err) => {
-        console.error('[AdminAudit] write failed:', err?.message || err);
+        adminAuditWriteFailCount += 1;
+        lastAdminAuditWriteError = err?.message || String(err);
+        console.error(
+            `[AdminAuditWriteFail] count=${adminAuditWriteFailCount} lastErr=${lastAdminAuditWriteError}`,
+        );
     });
 };

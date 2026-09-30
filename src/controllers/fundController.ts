@@ -4,7 +4,9 @@ import { FundPayment } from '../models/FundPaymentModel';
 import { FundAuditLog } from '../models/FundAuditLogModel';
 import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { User } from '../models/UserModel';
+import mongoose from 'mongoose';
 import { sendTelegramMessage } from '../services/telegramService';
+import { asSingleStringParam, rejectNoSql } from '../Utils/noSqlGuard';
 
 /** Best-effort audit write: a logging failure must never fail the payment flow. */
 const recordFundAudit = (
@@ -336,11 +338,26 @@ export const updateAdminCampaign = async (req: Request, res: Response, next: Nex
  */
 export const getAdminPayments = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { campaignId, status, search } = req.query;
+        // qs objects (?campaignId[$ne]=x) must 400, never become Mongo operators.
+        const campaignIdParam = asSingleStringParam(req.query.campaignId);
+        const statusParam = asSingleStringParam(req.query.status);
+        if (campaignIdParam === null || statusParam === null) {
+            return rejectNoSql(res);
+        }
         const filter: Record<string, unknown> = {};
 
-        if (campaignId) filter.campaignId = campaignId;
-        if (status && status !== 'all') filter.status = status;
+        if (campaignIdParam) {
+            if (!mongoose.Types.ObjectId.isValid(campaignIdParam)) {
+                return rejectNoSql(res, 'Invalid campaignId filter');
+            }
+            filter.campaignId = campaignIdParam;
+        }
+        if (statusParam && statusParam !== 'all') {
+            if (!['pending', 'approved', 'rejected'].includes(statusParam)) {
+                return rejectNoSql(res, 'Invalid status filter');
+            }
+            filter.status = statusParam;
+        }
 
         const payments = await FundPayment.find(filter)
             .populate('campaignId', 'title amount deadline semester')

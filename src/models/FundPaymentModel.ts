@@ -35,5 +35,7 @@ const fundPaymentSchema = new Schema<IFundPayment>(
 fundPaymentSchema.index({ campaignId: 1, userId: 1 });
 // Supports the admin stats aggregates grouped by campaign + status
 fundPaymentSchema.index({ campaignId: 1, status: 1 });
+// Member history: find({ userId }) + sort({ createdAt: -1 }).
+fundPaymentSchema.index({ userId: 1, createdAt: -1 });
 
 export const FundPayment = mongoose.model<IFundPayment>('FundPayment', fundPaymentSchema);

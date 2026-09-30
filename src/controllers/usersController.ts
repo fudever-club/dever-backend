@@ -6,6 +6,7 @@ import { Leaderboard } from '../models/LeaderboardModel';
 import { Position } from '../models/PositionModel';
 import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto, toPublicProfileKey, toPublicUserDto } from '../Utils/userDto';
+import { hasNoSqlKey, isPlainFilterScalar, rejectNoSql } from '../Utils/noSqlGuard';
 import { PRESIDENT_POSITION, VICE_PRESIDENT_POSITION } from '../middlewares/auth';
 
 const bcrypt = require('bcryptjs');
@@ -143,8 +144,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
             'isExcellent',
         ];
         const ADMIN_ONLY_FILTER_KEYS = ['nickname', 'email', 'phone', 'MSSV'];
-        const invalidFilter = () =>
-            res.status(400).json({ status: 'fail', message: 'Invalid filter format' });
+        const invalidFilter = () => rejectNoSql(res);
 
         if (req.query.filter) {
             try {
@@ -156,7 +156,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                     if (value === '' || value === null || value === undefined) {
                         continue;
                     }
-                    if (key.startsWith('$') || key.includes('.')) {
+                    if (hasNoSqlKey(key)) {
                         return invalidFilter();
                     }
                     // Generation alias used by the member directory UI.
@@ -169,7 +169,7 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
                         continue;
                     }
                     // Operators hide in objects/arrays; only scalars pass.
-                    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+                    if (!isPlainFilterScalar(value)) {
                         return invalidFilter();
                     }
                     const keyAllowed =

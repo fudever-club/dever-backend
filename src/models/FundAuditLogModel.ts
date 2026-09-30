@@ -32,4 +32,8 @@ const fundAuditLogSchema = new Schema<IFundAuditLog>(
     { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+// Audit pagination filters by campaign/payment + sort({ createdAt: -1 }).
+fundAuditLogSchema.index({ campaignId: 1, createdAt: -1 });
+fundAuditLogSchema.index({ paymentId: 1, createdAt: -1 });
+
 export const FundAuditLog = mongoose.model<IFundAuditLog>('FundAuditLog', fundAuditLogSchema);

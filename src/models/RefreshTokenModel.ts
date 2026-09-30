@@ -23,5 +23,8 @@ const refreshTokenSchema = new Schema<IRefreshToken>(
 
 // Expired sessions purge automatically (MongoDB TTL monitor cadence ~60s).
 refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Reuse-burn path: rotateSession() revokes the whole chain via
+// updateMany({ userId, revokedAt: null }).
+refreshTokenSchema.index({ userId: 1, revokedAt: 1 });
 
 export const RefreshToken = mongoose.model<IRefreshToken>('RefreshToken', refreshTokenSchema);

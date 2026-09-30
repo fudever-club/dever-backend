@@ -6,6 +6,7 @@ import { createNotification } from '../services/notificationService';
 import { invalidateCache } from '../services/cacheService';
 import { sanitizeBlogHtml, sanitizePlainText } from '../Utils/sanitize';
 import { recordAdminAudit } from '../models/AdminAuditLogModel';
+import { asSingleStringParam, rejectNoSql } from '../Utils/noSqlGuard';
 
 const escapeRegExp = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
@@ -18,7 +19,20 @@ const calculateReadTime = (content: string): string => {
 
 export const getAllBlogs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { category, tag, search, featured } = req.query;
+        // qs objects (?category[$ne]=x) must 400, never flow into the filter.
+        const categoryParam = asSingleStringParam(req.query.category);
+        const tagParam = asSingleStringParam(req.query.tag);
+        const searchParam = asSingleStringParam(req.query.search);
+        const featuredParam = asSingleStringParam(req.query.featured);
+        if (categoryParam === null || tagParam === null || searchParam === null || featuredParam === null) {
+            return rejectNoSql(res);
+        }
+        const { category, tag, search, featured } = {
+            category: categoryParam,
+            tag: tagParam,
+            search: searchParam,
+            featured: featuredParam,
+        };
         const filter: any = { status: 'published' };
 
         if (featured === 'true') {
@@ -279,7 +293,18 @@ export const toggleFeaturedBlog = async (req: Request, res: Response, next: Next
 
 export const getAllBlogsForAdmin = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { status, category, search } = req.query;
+        // Same qs-object guard as the public listing — ?status[$ne]=x must 400.
+        const statusParam = asSingleStringParam(req.query.status);
+        const categoryParam = asSingleStringParam(req.query.category);
+        const searchParam = asSingleStringParam(req.query.search);
+        if (statusParam === null || categoryParam === null || searchParam === null) {
+            return rejectNoSql(res);
+        }
+        const { status, category, search } = {
+            status: statusParam,
+            category: categoryParam,
+            search: searchParam,
+        };
         const filter: any = {};
 
         if (status && status !== 'all') {
