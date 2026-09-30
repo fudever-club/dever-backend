@@ -359,16 +359,32 @@ export const getAllBlogsForAdmin = async (req: Request, res: Response, next: Nex
     }
 };
 
+/** Review SLA: hours a submission may wait before it counts as overdue.
+ *  Computed only — no schema change, no migration. */
+export const REVIEW_SLA_HOURS = 72;
+
 export const getReviewQueue = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const blogs = await Blog.find({
             status: { $in: ['pending_review', 'changes_requested', 'draft'] },
         }).sort({ updatedAt: -1 });
 
+        const now = Date.now();
+        const data = blogs.map((b: any) => {
+            const blogObj = b.toObject ? b.toObject() : b;
+            const submittedAt = b.createdAt ? new Date(b.createdAt).getTime() : now;
+            const waitingHours = Math.max(0, Math.round(((now - submittedAt) / 36e5) * 10) / 10);
+            return { ...blogObj, waitingHours, slaOverdue: waitingHours > REVIEW_SLA_HOURS };
+        });
+
         res.status(200).json({
             status: 'success',
-            results: blogs.length,
-            data: blogs,
+            results: data.length,
+            sla: {
+                thresholdHours: REVIEW_SLA_HOURS,
+                overdueCount: data.filter((b: any) => b.slaOverdue).length,
+            },
+            data,
         });
     } catch (error) {
         next(error);
