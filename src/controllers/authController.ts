@@ -6,10 +6,12 @@ import {
     REFRESH_COOKIE,
     clearAuthCookies,
     issueSession,
+    revokeAllSessions,
     revokeSession,
     rotateSession,
     setAuthCookies,
 } from '../Utils/session';
+import { recordAdminAudit } from '../models/AdminAuditLogModel';
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -41,10 +43,11 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             return next(err);
         }
 
-        const token = jwt.sign({ userId: user._id }, getJwtSecret(), { expiresIn: '7d' });
+        const tokenVersion = (user as any).tokenVersion ?? 0;
+        const token = jwt.sign({ userId: user._id, v: tokenVersion }, getJwtSecret(), { expiresIn: '1h' });
         // Cookie session alongside the legacy body token so browser clients can
         // migrate to httpOnly storage without breaking existing integrations.
-        const session = await issueSession(user._id.toString());
+        const session = await issueSession(user._id.toString(), tokenVersion);
         setAuthCookies(req, res, { access: token, refresh: session.refreshToken });
         const { _id, firstname, lastname, email, avatar, description, isAdmin, isLeader, positionId } = user;
         return res.status(200).json({
@@ -87,6 +90,34 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
         await revokeSession((req.cookies as any)?.[REFRESH_COOKIE] as string | undefined);
         clearAuthCookies(req, res);
         return res.status(200).json({ status: 'success', message: 'Signed out' });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * Logout everywhere: revoke all refresh chains AND bump tokenVersion so
+ * access JWTs minted before this call fail the middleware version check.
+ * Clears the caller's cookies too — the caller must sign in again.
+ */
+export const revokeAll = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId as string | undefined;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Yêu cầu đăng nhập' });
+        }
+        const revoked = await revokeAllSessions(userId);
+        await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+        recordAdminAudit({
+            actorId: userId,
+            action: 'user.sessions_revoked',
+            targetType: 'user',
+            targetId: userId,
+            summary: `Revoked all sessions (${revoked} refresh chains)`,
+            ip: req.ip || '',
+        });
+        clearAuthCookies(req, res);
+        return res.status(200).json({ status: 'success', data: { revokedRefreshChains: revoked } });
     } catch (error) {
         return next(error);
     }

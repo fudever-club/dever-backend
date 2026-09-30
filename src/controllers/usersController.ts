@@ -7,6 +7,7 @@ import { Position } from '../models/PositionModel';
 import { recordAdminAudit } from '../models/AdminAuditLogModel';
 import { DEFAULT_PROFILE_VISIBILITY, toPrivateUserDto, toPublicProfileKey, toPublicUserDto } from '../Utils/userDto';
 import { hasNoSqlKey, isPlainFilterScalar, rejectNoSql } from '../Utils/noSqlGuard';
+import { revokeAllSessions } from '../Utils/session';
 import { PRESIDENT_POSITION, VICE_PRESIDENT_POSITION } from '../middlewares/auth';
 
 const bcrypt = require('bcryptjs');
@@ -584,6 +585,10 @@ export const resetPasword = async (req: Request, res: Response, next: NextFuncti
         }
         user.password = temporaryPassword;
         await user.save();
+        // A fresh secret must kill every existing session: bump the token
+        // version (access JWTs die in middleware) and revoke refresh chains.
+        await User.findByIdAndUpdate(req.params.userId, { $inc: { tokenVersion: 1 } });
+        await revokeAllSessions(req.params.userId);
         recordAdminAudit({
             actorId: res.locals.auth?.userId || null,
             action: 'user.password_reset',

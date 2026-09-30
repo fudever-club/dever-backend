@@ -27,7 +27,7 @@ const authenticate = async (req: Request): Promise<AuthContext | null> => {
         return null;
     }
 
-    const payload = jwt.verify(token, getJwtSecret()) as { userId?: string };
+    const payload = jwt.verify(token, getJwtSecret()) as { userId?: string; v?: number };
     if (!payload.userId) {
         return null;
     }
@@ -35,9 +35,16 @@ const authenticate = async (req: Request): Promise<AuthContext | null> => {
     // Do not trust roles embedded in a long-lived token. The current access
     // flag and organization title are always read from MongoDB.
     const user = await User.findById(payload.userId)
-        .select('_id isAdmin positionId')
+        .select('_id isAdmin positionId tokenVersion')
         .populate({ path: 'positionId', model: Position, select: 'constant' });
     if (!user) {
+        return null;
+    }
+
+    // Kill access tokens minted before a password reset / revoke-all.
+    // Legacy tokens carry no `v` and read as 0, matching untouched accounts.
+    const tokenVersion = typeof payload.v === 'number' ? payload.v : 0;
+    if (tokenVersion !== (user.tokenVersion ?? 0)) {
         return null;
     }
 

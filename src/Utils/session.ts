@@ -9,10 +9,11 @@ const jwt = require('jsonwebtoken');
 export const ACCESS_COOKIE = 'dever_at';
 export const REFRESH_COOKIE = 'dever_rt';
 
-/** Access expiry stays at the legacy 7d during the transition so existing
- *  clients holding body tokens are not logged out. Tighten only after the
- *  frontends complete the refresh flow. */
-export const ACCESS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Access lives 1h; the 30d refresh rotation is the long-lived credential.
+ *  Frontends already silent-refresh on 401, so the shorter window is
+ *  seamless for cookie clients. Legacy body-token integrations must
+ *  refresh (or re-login) hourly instead of weekly. */
+export const ACCESS_TTL_MS = 60 * 60 * 1000;
 export const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const hashToken = (token: string): string =>
@@ -61,8 +62,9 @@ export const readAccessToken = (req: Request): string | null => {
 
 export const issueSession = async (
     userId: string,
+    tokenVersion = 0,
 ): Promise<{ accessToken: string; refreshToken: string }> => {
-    const accessToken = jwt.sign({ userId }, getJwtSecret(), { expiresIn: '7d' });
+    const accessToken = jwt.sign({ userId, v: tokenVersion }, getJwtSecret(), { expiresIn: '1h' });
     const refreshToken = randomBytes(48).toString('hex');
     await RefreshToken.create({
         userId,
@@ -106,4 +108,15 @@ export const revokeSession = async (presented: string | undefined): Promise<void
         { tokenHash: hashToken(presented) },
         { $set: { revokedAt: new Date() } },
     );
+};
+
+/** Revoke every refresh chain of a user (logout-all-devices, password
+ *  reset, admin ban). Access JWTs are killed separately by the tokenVersion
+ *  bump checked in auth middleware — this call handles the refresh side. */
+export const revokeAllSessions = async (userId: string): Promise<number> => {
+    const result = await RefreshToken.updateMany(
+        { userId, revokedAt: null },
+        { $set: { revokedAt: new Date() } },
+    ).exec();
+    return (result as unknown as { modifiedCount?: number }).modifiedCount ?? 0;
 };

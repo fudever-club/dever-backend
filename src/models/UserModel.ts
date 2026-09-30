@@ -115,6 +115,13 @@ const userSchema = mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        tokenVersion: {
+            type: Number,
+            default: 0,
+            // Bumped on password reset / revoke-all so access JWTs minted
+            // before the bump fail the version check in auth middleware.
+            // Additive: legacy documents without the field read as 0.
+        },
         MSSV: {
             type: String,
             default: null,

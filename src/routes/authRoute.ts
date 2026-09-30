@@ -1,7 +1,8 @@
 import express from 'express';
 
-import { login, logout, refresh, welcome } from '../controllers/authController';
+import { login, logout, refresh, revokeAll, welcome } from '../controllers/authController';
 import { loginLimiter, refreshLimiter } from '../middlewares/rateLimit';
+import { requireAuth } from '../middlewares/auth';
 
 const Router = express.Router();
 
@@ -53,5 +54,6 @@ Router.route('/').get(welcome);
 Router.route('/login').post(loginLimiter, login);
 Router.route('/refresh').post(refreshLimiter, refresh);
 Router.route('/logout').post(logout);
+Router.route('/revoke-all').post(requireAuth, revokeAll);
 
 module.exports = Router;

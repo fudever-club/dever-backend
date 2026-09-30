@@ -9,6 +9,7 @@ const ADMIN_AUDIT_ACTIONS = [
     'user.leadership_changed',
     'user.deleted',
     'user.password_reset',
+    'user.sessions_revoked',
     'fund.payment_approved',
     'fund.payment_rejected',
     'blog.reviewed',
