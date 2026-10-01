@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 const jwt = require('jsonwebtoken');
-import _ from 'lodash';
 import { Leaderboard } from '../models/LeaderboardModel';
 import { User } from '../models/UserModel';
 import { refreshQuestionDifficulties } from './seasonController';

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { randomBytes, createHash } from 'crypto';
 import { getJwtSecret } from '../config/auth';
 import { RefreshToken } from '../models/RefreshTokenModel';
+import { User } from '../models/UserModel';
 
 const jwt = require('jsonwebtoken');
 
@@ -93,7 +94,17 @@ export const rotateSession = async (presented: string): Promise<RotateResult> =>
         );
         return { status: 'reused' };
     }
-    const next = await issueSession(session.userId.toString());
+    // Mint with the user's CURRENT version (never a hardcoded default) and
+    // refuse chains of deleted accounts instead of minting for ghosts.
+    const owner = await User.findById(session.userId).select('tokenVersion');
+    if (!owner) {
+        await RefreshToken.updateMany(
+            { userId: session.userId, revokedAt: null },
+            { $set: { revokedAt: new Date() } },
+        );
+        return { status: 'invalid' };
+    }
+    const next = await issueSession(session.userId.toString(), (owner as any).tokenVersion ?? 0);
     session.revokedAt = new Date();
     session.replacedByHash = hashToken(next.refreshToken);
     await session.save();

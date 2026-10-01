@@ -456,9 +456,15 @@ export const getAdminAuditLog = async (req: Request, res: Response, next: NextFu
         const skip = (page - 1) * limit;
         const filter: Record<string, unknown> = {};
         if (typeof req.query.campaignId === 'string' && req.query.campaignId) {
+            if (!mongoose.Types.ObjectId.isValid(req.query.campaignId)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid campaignId filter' });
+            }
             filter.campaignId = req.query.campaignId;
         }
         if (typeof req.query.paymentId === 'string' && req.query.paymentId) {
+            if (!mongoose.Types.ObjectId.isValid(req.query.paymentId)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid paymentId filter' });
+            }
             filter.paymentId = req.query.paymentId;
         }
         if (typeof req.query.action === 'string' && ['submitted', 'approved', 'rejected'].includes(req.query.action)) {

@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { User } from '../models/UserModel';
 import { createNotification } from '../services/notificationService';
+import { toPublicProfileKey } from '../Utils/userDto';
 
 export interface BadgeDefinition {
     id: string;
@@ -274,7 +275,7 @@ export const dailyCheckin = async (_req: Request, res: Response, next: NextFunct
 export const getHallOfFame = async (_req: Request, res: Response, next: NextFunction) => {
     try {
         let users = await User.find({})
-            .select('firstname lastname nickname avatar exp streakDays unlockedBadges positionId departments MSSV')
+            .select('firstname lastname nickname avatar exp streakDays unlockedBadges positionId departments')
             .populate('positionId', 'name')
             .populate('departments', 'name')
             .sort({ exp: -1 })
@@ -294,6 +295,7 @@ export const getHallOfFame = async (_req: Request, res: Response, next: NextFunc
 
             return {
                 _id: u._id,
+                profileKey: toPublicProfileKey(u),
                 name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.nickname || 'Thành viên DEVER',
                 avatar: u.avatar || '/images/avatar/avatar.jpg',
                 exp,

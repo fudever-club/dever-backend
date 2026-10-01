@@ -75,6 +75,13 @@ export const refreshLimiter = rateLimit({
     message: 'Too many refresh attempts, please try again later',
 });
 
+/** verifyToken returns a full private DTO — bound token-oracle probing. */
+export const verifyTokenLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    message: 'Too many verification attempts, please try again later',
+});
+
 /** Telegram sends retries/bursts; still cap abuse of the public webhook. */
 export const telegramWebhookLimiter = rateLimit({
     windowMs: 60 * 1000,

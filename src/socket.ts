@@ -25,12 +25,18 @@ const authenticateHandshake = async (socket: any, next: (error?: Error) => void)
         if (!token || typeof token !== 'string') {
             return next(new Error('Socket authentication required'));
         }
-        const payload = jwt.verify(token, getJwtSecret()) as { userId?: string };
+        const payload = jwt.verify(token, getJwtSecret()) as { userId?: string; v?: number };
         if (!payload?.userId) {
             return next(new Error('Socket authentication required'));
         }
-        const user: any = await User.findById(payload.userId).select('_id isAdmin');
+        const user: any = await User.findById(payload.userId).select('_id isAdmin tokenVersion');
         if (!user) {
+            return next(new Error('Socket authentication required'));
+        }
+        // Kill-switch parity with HTTP auth: pre-reset/revoke-all tokens
+        // cannot join rooms for the remainder of their TTL.
+        const tokenVersion = typeof payload.v === 'number' ? payload.v : 0;
+        if (tokenVersion !== (user.tokenVersion ?? 0)) {
             return next(new Error('Socket authentication required'));
         }
         socket.data = socket.data || {};

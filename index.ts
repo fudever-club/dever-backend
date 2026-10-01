@@ -46,6 +46,8 @@ const mongoose = require('mongoose');
 import { createCorsOptions } from './src/config/cors';
 
 const app = express();
+// Never advertise the framework — reduces fingerprinting for automated scanners.
+app.disable('x-powered-by');
 // Behind Railway/Vercel proxies so req.secure reflects the real scheme.
 app.set('trust proxy', 1);
 const server = require('http').Server(app);

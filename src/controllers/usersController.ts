@@ -346,6 +346,9 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
         user.password = newPassword;
         await user.save();
         await User.findByIdAndUpdate(userId, { $set: { mustChangePassword: false } });
+        // Same kill as the reset path: a changed secret retires all sessions.
+        await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+        await revokeAllSessions(userId);
         return res.status(200).json({ status: 'success', message: 'Password changed successfully' });
     } catch (error) {
         return next(error);

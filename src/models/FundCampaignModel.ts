@@ -46,4 +46,7 @@ const fundCampaignSchema = new Schema<IFundCampaign>(
     { timestamps: true },
 );
 
+// Hot path: findOne({ status: 'active' }).sort({ createdAt: -1 }).
+fundCampaignSchema.index({ status: 1, createdAt: -1 });
+
 export const FundCampaign = mongoose.model<IFundCampaign>('FundCampaign', fundCampaignSchema);

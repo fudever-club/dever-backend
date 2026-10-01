@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/UserModel';
-import _ from 'lodash';
 const jwt = require('jsonwebtoken');
 import { getJwtSecret } from '../config/auth';
 import { toPrivateUserDto } from '../Utils/userDto';
@@ -17,12 +16,21 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
         if (!token) {
             return res.status(400).json({ status: 'error', message: 'Token is required' });
         }
-        const { userId } = jwt.verify(token, getJwtSecret());
+        const payload = jwt.verify(token, getJwtSecret()) as { userId?: string; v?: number };
+        if (!payload?.userId) {
+            return res.status(401).json({ status: 'error', message: 'Your session is invalid or has expired' });
+        }
 
-        const user = await User.findById({ _id: userId }).populate({ path: 'positionId', model: Position });
+        const user = await User.findById({ _id: payload.userId }).populate({ path: 'positionId', model: Position });
 
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'Member not found' });
+        }
+        // Same kill-switch as the auth middleware: tokens minted before a
+        // password reset / revoke-all die here too.
+        const tokenVersion = typeof payload.v === 'number' ? payload.v : 0;
+        if (tokenVersion !== ((user as any).tokenVersion ?? 0)) {
+            return res.status(401).json({ status: 'error', message: 'Your session is invalid or has expired' });
         }
         const responseData = toPrivateUserDto(user);
 
