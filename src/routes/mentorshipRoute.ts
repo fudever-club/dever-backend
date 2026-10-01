@@ -2,6 +2,7 @@ import express from 'express';
 import {
     getMentors,
     getMyMentorshipRequests,
+    listMentorshipRequests,
     requestMentorship,
     reviewMentorshipRequest,
 } from '../controllers/mentorshipController';
@@ -17,7 +18,8 @@ Router.route('/mentors').get(getMentors);
 Router.route('/mentors/:alumniId/request').post(requireAuth, mentorshipLimiter, requestMentorship);
 Router.route('/requests/me').get(requireAuth, getMyMentorshipRequests);
 
-// Admin moderation.
+// Admin moderation queue.
+Router.route('/requests').get(requireAuth, requireAdmin, listMentorshipRequests);
 Router.route('/requests/:id/review').patch(requireAuth, requireAdmin, reviewMentorshipRequest);
 
 module.exports = Router;

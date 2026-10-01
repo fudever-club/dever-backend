@@ -87,6 +87,48 @@ export const getMyMentorshipRequests = async (req: Request, res: Response, next:
     }
 };
 
+/** Admin-only request queue with mentor + requester cards. */
+export const listMentorshipRequests = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 24, 1), 100);
+        const skip = (page - 1) * limit;
+        const filter: Record<string, unknown> = {};
+        if (typeof req.query.status === 'string' && req.query.status) {
+            if (!['pending', 'accepted', 'declined'].includes(req.query.status)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid status filter' });
+            }
+            filter.status = req.query.status;
+        }
+        if (typeof req.query.alumniId === 'string' && req.query.alumniId) {
+            if (!mongoose.Types.ObjectId.isValid(req.query.alumniId)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid alumniId filter' });
+            }
+            filter.alumniId = req.query.alumniId;
+        }
+        const [rows, total] = await Promise.all([
+            MentorshipRequest.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate('alumniId', 'name headline avatar workplace')
+                .populate('requesterId', 'firstname lastname email gen')
+                .lean(),
+            MentorshipRequest.countDocuments(filter),
+        ]);
+        return res.status(200).json({
+            status: 'success',
+            results: rows.length,
+            total,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+            data: rows,
+        });
+    } catch (error) {
+        return next(error);
+    }
+};
+
 /** Admin review: accept opens contact exchange, decline closes the request. */
 export const reviewMentorshipRequest = async (req: Request, res: Response, next: NextFunction) => {
     try {
