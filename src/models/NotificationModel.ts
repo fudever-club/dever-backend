@@ -12,6 +12,8 @@ export interface INotification extends Document {
         | 'level_up'
         | 'streak_milestone'
         | 'event_created'
+        | 'mentorship_requested'
+        | 'mentorship_reviewed'
         | 'system_alert';
     title: string;
     message: string;
@@ -47,6 +49,8 @@ const notificationSchema = new Schema<INotification>(
                 'level_up',
                 'streak_milestone',
                 'event_created',
+                'mentorship_requested',
+                'mentorship_reviewed',
                 'system_alert',
             ],
             required: true,

@@ -109,3 +109,10 @@ export const leetcodeUpdateLimiter = rateLimit({
     max: 10,
     message: 'Sync is rate limited, please try again later',
 });
+
+/** Mentorship requests ping mentors — bound request spam per IP. */
+export const mentorshipLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'Too many mentorship requests, please try again later',
+});

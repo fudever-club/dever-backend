@@ -30,6 +30,7 @@ const telegramRoute = require('./src/routes/telegramRoute');
 const adminAuditRoute = require('./src/routes/adminAuditRoute');
 const inviteRoute = require('./src/routes/inviteRoute');
 const seasonRoute = require('./src/routes/seasonRoute');
+const mentorshipRoute = require('./src/routes/mentorshipRoute');
 import { observabilityService } from './src/services/observabilityService';
 const { errorHandler } = require('./src/middlewares/errorHandler');
 
@@ -99,6 +100,7 @@ app.use('/api/v1/auth', authRoute);
 app.use('/api/v1/users', usersRoute);
 app.use('/api/v1/invites', inviteRoute);
 app.use('/api/v1/seasons', seasonRoute);
+app.use('/api/v1/mentorship', mentorshipRoute);
 app.use('/api/v1/edit-profile', profileRoute);
 
 app.use('/api/v1/social', socialRoute);

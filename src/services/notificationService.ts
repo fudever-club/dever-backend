@@ -22,6 +22,8 @@ export interface CreateNotificationParams {
         | 'level_up'
         | 'streak_milestone'
         | 'event_created'
+        | 'mentorship_requested'
+        | 'mentorship_reviewed'
         | 'system_alert';
     title: string;
     message: string;

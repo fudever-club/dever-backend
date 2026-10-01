@@ -22,6 +22,7 @@ const ADMIN_AUDIT_ACTIONS = [
     'season.created',
     'season.updated',
     'season.ended',
+    'mentorship.reviewed',
 ];
 
 const ADMIN_AUDIT_TARGET_TYPES = [
@@ -34,6 +35,7 @@ const ADMIN_AUDIT_TARGET_TYPES = [
     'campaign',
     'position',
     'season',
+    'mentorship',
 ];
 
 /**
