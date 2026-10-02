@@ -551,6 +551,70 @@ export const getFundAnalytics = async (_req: Request, res: Response, next: NextF
     }
 };
 
+/** CSV cell escaping (RFC 4180): quote when needed, double inner quotes. */
+const csvCell = (value: unknown): string => {
+    const text = value === null || value === undefined ? '' : String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+/**
+ * 12. Admin: export payment proofs as CSV for treasurer reconciliation.
+ * Admin-only, capped, no proof image URLs (bills stay in the dashboard).
+ */
+export const exportAdminPaymentsCsv = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const filter: Record<string, unknown> = {};
+        if (typeof req.query.campaignId === 'string' && req.query.campaignId) {
+            if (!mongoose.Types.ObjectId.isValid(req.query.campaignId)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid campaignId filter' });
+            }
+            filter.campaignId = req.query.campaignId;
+        }
+        if (typeof req.query.status === 'string' && req.query.status && req.query.status !== 'all') {
+            if (!['pending', 'approved', 'rejected'].includes(req.query.status)) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid status filter' });
+            }
+            filter.status = req.query.status;
+        }
+        const payments = await FundPayment.find(filter)
+            .sort({ createdAt: -1 })
+            .limit(5000)
+            .populate('campaignId', 'title amount')
+            .populate('userId', 'firstname lastname email MSSV')
+            .lean();
+        const header = ['campaign', 'name', 'mssv', 'email', 'amount', 'status', 'transactionCode', 'submittedAt', 'reviewedAt', 'reviewNotes'];
+        const lines = payments.map((p: any) =>
+            [
+                (p.campaignId as any)?.title || '',
+                [p.userId?.firstname, p.userId?.lastname].filter(Boolean).join(' '),
+                p.userId?.MSSV || '',
+                p.userId?.email || '',
+                p.amount ?? '',
+                p.status || '',
+                p.transactionCode || '',
+                p.createdAt ? new Date(p.createdAt).toISOString() : '',
+                p.reviewedAt ? new Date(p.reviewedAt).toISOString() : '',
+                p.reviewNotes || '',
+            ]
+                .map(csvCell)
+                .join(','),
+        );
+        recordAdminAudit({
+            actorId: res.locals.auth?.userId || null,
+            action: 'fund.exported',
+            targetType: 'fund_payment',
+            targetId: (filter.campaignId as string) || 'all',
+            summary: `Exported ${payments.length} payment rows`.slice(0, 500),
+            ip: req.ip || '',
+        });
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="fund-payments.csv"');
+        return res.status(200).send('\uFEFF' + [header.join(','), ...lines].join('\n'));
+    } catch (error) {
+        return next(error);
+    }
+};
+
 /**
  * 11. Public fund transparency stats (aggregates only — no names, no bills,
  * no per-member amounts). Cached 60s at the route; mutations above bust the

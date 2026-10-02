@@ -15,6 +15,7 @@ export type AdminAuditAction =
     | 'user.sessions_revoked'
     | 'fund.payment_approved'
     | 'fund.payment_rejected'
+    | 'fund.exported'
     | 'blog.reviewed'
     | 'opensource.approved'
     | 'opensource.rejected'
@@ -66,6 +67,7 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
                 'user.sessions_revoked',
                 'fund.payment_approved',
                 'fund.payment_rejected',
+                'fund.exported',
                 'blog.reviewed',
                 'opensource.approved',
                 'opensource.rejected',

@@ -58,24 +58,17 @@ const port = Number(process.env.PORT || process.env.APP_PORT || 5000);
 // Exact-match origin policy lives in src/config/cors.ts. Preview or tenant
 // deployments not on the built-in roster must be added explicitly through
 // the CORS_ORIGINS environment variable — never via domain wildcards.
-// TODO(helmet): helmet is not a dependency (Phase 1 adds no new deps).
-// Replace securityHeaders() with app.use(helmet()) once helmet is installed.
-// CSP is intentionally unset here: swagger-ui-express (/docs, /docs.json)
-// serves inline scripts/styles, so a default CSP would break /docs. When
-// helmet lands, scope CSP to /docs only (allow 'self' + 'unsafe-inline' for
-// swagger assets) and keep the API default deny.
-const securityHeaders = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // HSTS only in production — setting it on plain-http localhost would
-    // poison local browsers via cached 31536000s policy.
-    if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
-    next();
-};
-app.use(securityHeaders);
+// Helmet ships every standard header except CSP: swagger-ui-express (/docs,
+// /docs.json) serves inline scripts/styles, so a default CSP would break the
+// API docs. If CSP is ever enabled, scope it to /docs only.
+const helmet = require('helmet');
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+        // HSTS max-age from helmet (15552000s) applies; browsers ignore HSTS
+        // over plain http, so localhost development is unaffected.
+    }),
+);
 app.use(cors(createCorsOptions()));
 
 // Resource uploads are stored as encoded document bytes. Keep this below the

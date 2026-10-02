@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     createAdminCampaign,
+    exportAdminPaymentsCsv,
     getActiveCampaign,
     getAdminAuditLog,
     getAdminCampaigns,
@@ -28,6 +29,7 @@ router.get('/admin/campaigns', requireAuth, requireAdmin, getAdminCampaigns);
 router.post('/admin/campaigns', requireAuth, requireAdmin, createAdminCampaign);
 router.patch('/admin/campaigns/:id', requireAuth, requireAdmin, updateAdminCampaign);
 router.get('/admin/payments', requireAuth, requireAdmin, getAdminPayments);
+router.get('/admin/payments/export', requireAuth, requireAdmin, exportAdminPaymentsCsv);
 router.patch('/admin/payments/:id/review', requireAuth, requireAdmin, reviewAdminPayment);
 router.get('/admin/audit', requireAuth, requireAdmin, getAdminAuditLog);
 router.get('/admin/analytics', requireAuth, requireAdmin, getFundAnalytics);
