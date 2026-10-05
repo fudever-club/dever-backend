@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import { redisConfigured, redisIncr } from '../services/redisStore';
 
 type RateLimitOptions = {
     /** Sliding window length in milliseconds. */
@@ -33,16 +34,37 @@ const cleanupTimer = setInterval(() => {
 cleanupTimer.unref();
 
 /**
- * Zero-dependency in-memory sliding-window rate limiter.
- * Suitable for a single Node process.
- * TODO: replace with a shared store (e.g. Redis) if the API ever runs
- * behind multiple instances — per-process budgets do not compose.
+ * Zero-dependency sliding-window rate limiter with a shared Redis budget.
+ * Suitable for a single Node process; when UPSTASH_* is configured every
+ * instance shares one budget, otherwise (or when Redis is slow/down) each
+ * process falls back to its local map without failing the request.
  */
 export const rateLimit = (options: RateLimitOptions) => {
     const { windowMs, max, message } = options;
-    return (req: Request, res: Response, next: NextFunction) => {
+    const tooMany = (res: Response, retryAfter: number) => {
+        res.setHeader('Retry-After', String(Math.max(1, retryAfter)));
+        return res.status(429).json({
+            status: 'error',
+            message: message || 'Too many requests, please try again later',
+        });
+    };
+    return async (req: Request, res: Response, next: NextFunction) => {
         const key = `${req.ip || 'unknown'}:${req.baseUrl}${req.path}`;
         const now = Date.now();
+        // Shared budget first (no-op when Redis is unconfigured/failing).
+        if (redisConfigured()) {
+            try {
+                const shared = await redisIncr(`rl:${key}`, windowMs / 1000);
+                if (shared !== null) {
+                    if (shared > max) {
+                        return tooMany(res, Math.ceil(windowMs / 1000));
+                    }
+                    return next();
+                }
+            } catch {
+                // Fall through to the local budget below.
+            }
+        }
         const record = hits.get(key);
         if (!record || record.resetAt <= now) {
             hits.set(key, { count: 1, resetAt: now + windowMs });
@@ -51,11 +73,7 @@ export const rateLimit = (options: RateLimitOptions) => {
         record.count += 1;
         if (record.count > max) {
             const retryAfter = Math.ceil((record.resetAt - now) / 1000);
-            res.setHeader('Retry-After', String(retryAfter));
-            return res.status(429).json({
-                status: 'error',
-                message: message || 'Too many requests, please try again later',
-            });
+            return tooMany(res, retryAfter);
         }
         return next();
     };
