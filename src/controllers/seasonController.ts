@@ -190,11 +190,14 @@ export const updateSeason = async (req: Request, res: Response, next: NextFuncti
         }
         const nextBracket = req.body?.bracket !== undefined ? parseBracket(req.body.bracket, season.bracket) : season.bracket;
         const nextCutoff = parseCutoff(req.body?.newbieGenCutoff);
-        if (nextCutoff === null) {
+        // Ending a season is always safe (it only shrinks exposure), so a
+        // legacy row with an invalid bracket config can still be retired.
+        const endingOnly = status === 'ended' && req.body?.bracket === undefined && req.body?.newbieGenCutoff === undefined;
+        if (!endingOnly && nextCutoff === null) {
             return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
         }
         const effectiveCutoff = nextCutoff !== undefined ? nextCutoff : season.newbieGenCutoff;
-        if (nextBracket !== 'open' && (effectiveCutoff === null || effectiveCutoff === undefined)) {
+        if (!endingOnly && nextBracket !== 'open' && (effectiveCutoff === null || effectiveCutoff === undefined)) {
             return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
         }
         season.bracket = nextBracket;
