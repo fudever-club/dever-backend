@@ -121,7 +121,7 @@ export const createSeason = async (req: Request, res: Response, next: NextFuncti
             typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
         const bracket = parseBracket(req.body?.bracket);
         const cutoff = parseCutoff(req.body?.newbieGenCutoff);
-        if (bracket !== 'open' && cutoff === null) {
+        if (bracket !== 'open' && typeof cutoff !== 'number') {
             return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
         }
         const season = await Season.create({
