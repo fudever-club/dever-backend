@@ -73,7 +73,19 @@ const toSeasonDto = (season: any) => ({
     endDate: season.endDate,
     status: season.status,
     scoring: season.scoring,
+    bracket: season.bracket || 'open',
+    newbieGenCutoff: season.newbieGenCutoff ?? null,
 });
+
+const parseBracket = (value: unknown, fallback: 'open' | 'newbie' | 'pro' = 'open') =>
+    value === 'newbie' || value === 'pro' || value === 'open' ? value : fallback;
+
+const parseCutoff = (value: unknown): number | null | undefined => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const n = typeof value === 'number' ? value : parseInt(String(value), 10);
+    if (!Number.isInteger(n) || n < 1) return null;
+    return n;
+};
 
 /** Public season list (newest first). */
 export const getSeasons = async (_req: Request, res: Response, next: NextFunction) => {
@@ -107,11 +119,18 @@ export const createSeason = async (req: Request, res: Response, next: NextFuncti
         const seasonStatus = status === 'active' ? 'active' : 'upcoming';
         const points = (value: unknown, fallback: number) =>
             typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+        const bracket = parseBracket(req.body?.bracket);
+        const cutoff = parseCutoff(req.body?.newbieGenCutoff);
+        if (bracket !== 'open' && cutoff === null) {
+            return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
+        }
         const season = await Season.create({
             name: name.trim(),
             startDate: start,
             endDate: end,
             status: seasonStatus,
+            bracket,
+            newbieGenCutoff: cutoff ?? null,
             scoring: {
                 easy: points(scoring?.easy, 1),
                 medium: points(scoring?.medium, 3),
@@ -169,6 +188,17 @@ export const updateSeason = async (req: Request, res: Response, next: NextFuncti
                 hard: points((scoring as any).hard, season.scoring.hard),
             };
         }
+        const nextBracket = req.body?.bracket !== undefined ? parseBracket(req.body.bracket, season.bracket) : season.bracket;
+        const nextCutoff = parseCutoff(req.body?.newbieGenCutoff);
+        if (nextCutoff === null) {
+            return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
+        }
+        const effectiveCutoff = nextCutoff !== undefined ? nextCutoff : season.newbieGenCutoff;
+        if (nextBracket !== 'open' && (effectiveCutoff === null || effectiveCutoff === undefined)) {
+            return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'A valid newbieGenCutoff is required for bracketed seasons' });
+        }
+        season.bracket = nextBracket;
+        season.newbieGenCutoff = effectiveCutoff ?? null;
         let auditAction: 'season.updated' | 'season.ended' = 'season.updated';
         if (status !== undefined) {
             if (status !== 'upcoming' && status !== 'active' && status !== 'ended') {
@@ -223,14 +253,22 @@ export const getSeasonLeaderboard = async (req: Request, res: Response, next: Ne
         const endMs = new Date(season.endDate).getTime();
         const entries = await Leaderboard.find({}).populate({
             path: 'userId',
-            select: 'id firstname lastname avatar profileVisibility',
+            select: 'id firstname lastname avatar profileVisibility gen',
         });
         const cached = await SeasonQuestionCache.find({}).select('titleSlug difficulty').lean();
         const difficultyOf = new Map((cached || []).map((c: any) => [c.titleSlug, c.difficulty]));
         const scoring = season.scoring || { easy: 1, medium: 3, hard: 5 };
         let unknownTotal = 0;
+        const bracket = season.bracket || 'open';
+        const cutoff = season.newbieGenCutoff ?? null;
+        const inBracket = (gen: unknown): boolean => {
+            if (bracket === 'open' || cutoff === null) return true;
+            if (typeof gen !== 'number') return false;
+            return bracket === 'newbie' ? gen >= cutoff : gen < cutoff;
+        };
         const board = entries
             .filter((entry: any) => entry.userId && entry.userId.profileVisibility?.leetcode === true)
+            .filter((entry: any) => inBracket(entry.userId.gen))
             .map((entry: any) => {
                 const seen = new Map<string, string>();
                 for (const sub of entry.acSubmissionList || []) {
@@ -265,6 +303,7 @@ export const getSeasonLeaderboard = async (req: Request, res: Response, next: Ne
                         lastname: entry.userId.lastname || null,
                         avatar: entry.userId.avatar || null,
                         profileKey: toPublicProfileKey(entry.userId),
+                        gen: typeof entry.userId.gen === 'number' ? entry.userId.gen : null,
                     },
                     solved: seen.size,
                     score,

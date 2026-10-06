@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { Alumni } from '../models/AlumniModel';
+import { MENTORSHIP_TOPICS } from '../models/MentorshipRequestModel';
 import { User } from '../models/UserModel';
 import { sendTelegramMessage } from '../services/telegramService';
 
@@ -64,6 +65,76 @@ export const deleteAlumni = async (req: Request, res: Response, next: NextFuncti
         const alumnus = await Alumni.findByIdAndDelete(req.params.id);
         if (!alumnus) return res.status(404).json({ status: 'error', message: 'Alumni item not found' });
         return res.status(200).json({ status: 'success', message: 'Alumni item deleted' });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * My mentor profile (for alumni linked to a member account): current
+ * opt-in state with safe fields only.
+ */
+export const getMyMentorProfile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Yêu cầu đăng nhập' });
+        }
+        const alumnus = await Alumni.findOne({ userId }).select(
+            'name headline isMentor isPublished mentoringTopics',
+        );
+        if (!alumnus) {
+            return res.status(404).json({ status: 'error', message: 'Chưa có hồ sơ alumni liên kết', data: null });
+        }
+        return res.status(200).json({ status: 'success', data: alumnus });
+    } catch (error) {
+        return next(error);
+    }
+};
+
+/**
+ * Alumni self opt-in/out as mentor. Only isMentor + mentoringTopics are
+ * writable here — visibility (isPublished) stays admin-controlled so a
+ * member can never self-publish to the public directory.
+ */
+export const updateMyMentorProfile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = res.locals.auth?.userId;
+        if (!userId) {
+            return res.status(401).json({ status: 'error', message: 'Yêu cầu đăng nhập' });
+        }
+        const alumnus = await Alumni.findOne({ userId });
+        if (!alumnus) {
+            return res.status(404).json({ status: 'error', message: 'Chưa có hồ sơ alumni liên kết', data: null });
+        }
+        if (req.body?.isMentor !== undefined) {
+            if (typeof req.body.isMentor !== 'boolean') {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'isMentor must be a boolean' });
+            }
+            alumnus.isMentor = req.body.isMentor;
+        }
+        if (req.body?.mentoringTopics !== undefined) {
+            if (
+                !Array.isArray(req.body.mentoringTopics) ||
+                !(req.body.mentoringTopics as unknown[]).every((topic) =>
+                    (MENTORSHIP_TOPICS as readonly string[]).includes(String(topic)),
+                )
+            ) {
+                return res.status(400).json({ status: 'error', code: 'VALIDATION_ERROR', message: 'Invalid mentoring topics' });
+            }
+            alumnus.mentoringTopics = (req.body.mentoringTopics as string[]).slice(0, 10);
+        }
+        await alumnus.save();
+        return res.status(200).json({
+            status: 'success',
+            data: {
+                _id: alumnus._id,
+                name: alumnus.name,
+                isMentor: alumnus.isMentor,
+                isPublished: alumnus.isPublished,
+                mentoringTopics: alumnus.mentoringTopics,
+            },
+        });
     } catch (error) {
         return next(error);
     }

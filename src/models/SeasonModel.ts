@@ -14,6 +14,8 @@ export interface ISeason extends Document {
     endDate: Date;
     status: SeasonStatus;
     scoring: { easy: number; medium: number; hard: number };
+    bracket: 'open' | 'newbie' | 'pro';
+    newbieGenCutoff: number | null;
     createdBy: mongoose.Types.ObjectId | null;
     createdAt: Date;
 }
@@ -34,6 +36,15 @@ const seasonSchema = new Schema<ISeason>(
             medium: { type: Number, default: 3, min: 0 },
             hard: { type: Number, default: 5, min: 0 },
         },
+        // Newbie bracket: seasons can restrict to newcomers (gen >= cutoff)
+        // or veterans (gen < cutoff). 'open' ignores gen entirely.
+        bracket: {
+            type: String,
+            enum: ['open', 'newbie', 'pro'],
+            default: 'open',
+            index: true,
+        },
+        newbieGenCutoff: { type: Number, default: null, min: 1 },
         createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     },
     { timestamps: { createdAt: true, updatedAt: true } },
