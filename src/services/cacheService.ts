@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { redisConfigured, redisDelGroup, redisGetJson, redisSetJson } from './redisStore';
 
 interface CacheEntry {
   body: any;
@@ -99,7 +100,7 @@ export const memoryCache = new MemoryCacheManager();
  * @param cacheGroup Group identifier for targeted invalidation (e.g. 'blogs', 'leetcode')
  */
 export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     // Only cache GET requests
     if (req.method !== 'GET') {
       return next();
@@ -125,6 +126,25 @@ export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => 
       return res.status(200).json(cachedData);
     }
 
+    // Shared layer: every instance reads the same budget-warmed entries.
+    // Fail-open — a Redis miss/error behaves exactly like a local miss.
+    if (redisConfigured()) {
+      try {
+        const shared = await redisGetJson(`cache:${cacheKey}`);
+        if (shared !== null && shared !== undefined) {
+          memoryCache.set(cacheKey, shared, Math.min(ttlSeconds, 60));
+          res.setHeader('X-Cache', 'HIT-shared');
+          res.setHeader(
+            'Cache-Control',
+            `public, max-age=${Math.min(ttlSeconds, 60)}, stale-while-revalidate=30`
+          );
+          return res.status(200).json(shared);
+        }
+      } catch {
+        // Fall through to origin.
+      }
+    }
+
     // Intercept res.json to capture response payload on success
     const originalJson = res.json.bind(res);
     res.json = (body: any) => {
@@ -134,6 +154,9 @@ export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => 
       // and never overwrite its header with a public cache directive.
       if (res.statusCode >= 200 && res.statusCode < 300 && !/no-store/i.test(downstreamCacheControl)) {
         memoryCache.set(cacheKey, body, ttlSeconds);
+        if (redisConfigured()) {
+          redisSetJson(`cache:${cacheKey}`, body, ttlSeconds).catch(() => {});
+        }
         res.setHeader('X-Cache', 'MISS');
         res.setHeader(
           'Cache-Control',
@@ -150,8 +173,13 @@ export const cacheRoute = (ttlSeconds: number = 60, cacheGroup: string = '') => 
 /**
  * Invalidate all cached routes belonging to a specific group or prefix.
  * @param cacheGroup Name of the cache group to clear (e.g. 'blogs', 'leetcode', 'events')
+ * Clears memory immediately and best-effort purges the shared Redis layer
+ * (fire-and-forget: callers never wait on it).
  */
 export const invalidateCache = (cacheGroup: string): number => {
   const cleared = memoryCache.del(`[${cacheGroup}]`);
+  if (redisConfigured()) {
+    redisDelGroup(`cache:[${cacheGroup}]`).catch(() => {});
+  }
   return cleared;
 };

@@ -45,3 +45,49 @@ export const redisIncr = async (key: string, windowSeconds: number): Promise<num
     }
     return numeric;
 };
+
+/**
+ * Shared read cache (JSON values). Fail-open null on any error so callers
+ * always fall back to memory/origin. Values cap ~256KB to stay well under
+ * Upstash REST command limits.
+ */
+const MAX_CACHE_BYTES = 256 * 1024;
+
+export const redisGetJson = async (key: string): Promise<any | null | undefined> => {
+    const raw = await redisCmd(['GET', key]);
+    if (typeof raw !== 'string' || raw.length === 0) return raw === null ? null : undefined;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return undefined;
+    }
+};
+
+export const redisSetJson = async (key: string, value: unknown, ttlSeconds: number): Promise<void> => {
+    let encoded: string;
+    try {
+        encoded = JSON.stringify(value);
+    } catch {
+        return;
+    }
+    if (encoded.length > MAX_CACHE_BYTES) return;
+    await redisCmd(['SET', key, encoded, 'EX', Math.max(1, Math.ceil(ttlSeconds))]);
+};
+
+/** Best-effort group invalidation via SCAN + DEL (bounded iterations). */
+export const redisDelGroup = async (groupPrefix: string): Promise<number> => {
+    let cursor = '0';
+    let deleted = 0;
+    for (let round = 0; round < 20; round += 1) {
+        const page: any = await redisCmd(['SCAN', cursor, 'MATCH', `${groupPrefix}*`, 'COUNT', 100]);
+        if (!Array.isArray(page) || page.length < 2) return deleted;
+        cursor = String(page[0]);
+        const keys = (page[1] as unknown[]).map(String).filter(Boolean);
+        if (keys.length > 0) {
+            await redisCmd(['DEL', ...keys]);
+            deleted += keys.length;
+        }
+        if (cursor === '0') return deleted;
+    }
+    return deleted;
+};
